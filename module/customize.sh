@@ -1,7 +1,6 @@
 #!/system/bin/sh
 ui_print "- SD/OTG Bind Mount"
 
-MODDIR="$MODPATH"
 CONF="$MODPATH/mounts.conf"
 LOG="$MODPATH/mount.log"
 
@@ -17,25 +16,9 @@ touch "$LOG"
 chmod 644 "$CONF" "$LOG" 2>/dev/null
 chmod 755 "$MODPATH/webctl.sh" "$MODPATH/service.sh" "$MODPATH/post-fs-data.sh" "$MODPATH/uninstall.sh" "$MODPATH/common/functions.sh" 2>/dev/null
 
-# Carga helpers (install_manager_apk, log, …)
-if [ -f "$MODPATH/common/functions.sh" ]; then
-    . "$MODPATH/common/functions.sh"
-fi
-
-# Instala la app. El APK debug es testOnly: hace falta -t.
-# Además pm no puede leer desde el directorio del módulo (SELinux),
-# así que se copia a /data/local/tmp.
 APK="$MODPATH/app/sdcard-bind-manager.apk"
 if [ -f "$APK" ]; then
-    ui_print "- Instalando la app SD Bind Manager..."
-    if install_manager_apk "$APK"; then
-        ui_print "- App instalada correctamente"
-    else
-        ui_print "- No se pudo instalar ahora: se reintentará al reiniciar"
-        ui_print "- Si no aparece, instala module/app/sdcard-bind-manager.apk a mano"
-    fi
-else
-    ui_print "- (Sin APK incluido: usa la WebUI del Manager para configurar)"
+    ui_print "- APK incluido: si la app no está, instalala a mano (sdcard-bind-manager.apk)"
 fi
 
-ui_print "- Abre la app 'SD Bind Manager' o la WebUI del módulo para configurar las carpetas"
+ui_print "- Configurá las carpetas en la app o en la WebUI, luego 'Guardar y montar'"

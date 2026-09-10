@@ -10,7 +10,6 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG"
 }
 
-# La WebUI escribe las rutas con '/' final; el picker de la app no lo hacía.
 ensure_slash() {
     p="$1"
     case "$p" in
@@ -20,7 +19,57 @@ ensure_slash() {
     esac
 }
 
-# Espera hasta ~15s a que aparezca una ruta (la SD/OTG puede montarse tarde)
+strip_slash() {
+    p="$1"
+    case "$p" in
+        /) echo / ;;
+        */) echo "${p%/}" ;;
+        *) echo "$p" ;;
+    esac
+}
+
+# La app (libsu) corre en un mount namespace aislado: el bind queda invisible
+# para el resto de apps. La WebUI de KSU sí usa el namespace global (init).
+# nsenter -t 1 -m hace el mount donde todo el sistema lo ve.
+run_global() {
+    if [ -r /proc/1/ns/mnt ]; then
+        if command -v nsenter >/dev/null 2>&1; then
+            nsenter -t 1 -m -- "$@"
+            return $?
+        fi
+        if [ -x /system/bin/nsenter ]; then
+            /system/bin/nsenter -t 1 -m -- "$@"
+            return $?
+        fi
+        if [ -x /system/bin/toybox ]; then
+            /system/bin/toybox nsenter -t 1 -m -- "$@"
+            return $?
+        fi
+    fi
+    "$@"
+}
+
+# Nunca bind/umount de la raíz del almacenamiento interno (rompe el teléfono).
+is_protected() {
+    p=$(strip_slash "$1")
+    case "$p" in
+        ""|"/"|"/storage"|"/storage/emulated"|"/storage/emulated/0"|"/sdcard"|"/mnt/sdcard"|"/data"|"/data/media"|"/data/media/0"|"/mnt"|"/mnt/user"|"/mnt/user/0"|"/mnt/runtime"|"/mnt/pass_through"|"/mnt/media_rw")
+            return 0 ;;
+    esac
+    return 1
+}
+
+# Consulta la tabla de montaje de init (namespace global), no la del proceso actual.
+is_mounted() {
+    p=$(strip_slash "$1")
+    [ -n "$p" ] || return 1
+    if [ -r /proc/1/mounts ]; then
+        awk -v p="$p" '$2 == p { found=1 } END { exit found ? 0 : 1 }' /proc/1/mounts
+        return $?
+    fi
+    run_global mountpoint -q "$p" 2>/dev/null
+}
+
 wait_for_path() {
     SRC="$1"
     i=0
@@ -35,20 +84,25 @@ mount_one() {
     SRC=$(ensure_slash "$1")
     DEST=$(ensure_slash "$2")
 
+    if is_protected "$DEST"; then
+        log "FALLO (destino inseguro, elegí una subcarpeta): $DEST"
+        return 1
+    fi
+
     if ! wait_for_path "$SRC"; then
         log "FALLO (origen no encontrado): $SRC"
         return 1
     fi
 
-    mkdir -p "$DEST" 2>/dev/null
+    run_global mkdir -p "$DEST" 2>/dev/null
 
-    if mountpoint -q "$DEST" 2>/dev/null; then
+    if is_mounted "$DEST"; then
         log "Ya montado: $DEST"
         return 0
     fi
 
-    if mount -o bind "$SRC" "$DEST" 2>>"$LOG"; then
-        chcon -R u:object_r:media_rw_data_file:s0 "$DEST" 2>/dev/null
+    if run_global mount -o bind "$(strip_slash "$SRC")" "$(strip_slash "$DEST")" 2>>"$LOG"; then
+        run_global chcon -R u:object_r:media_rw_data_file:s0 "$(strip_slash "$DEST")" 2>/dev/null
         log "OK: $SRC -> $DEST"
         return 0
     else
@@ -59,14 +113,16 @@ mount_one() {
 
 unmount_one() {
     DEST=$(ensure_slash "$1")
-    if mountpoint -q "$DEST" 2>/dev/null; then
-        umount -l "$DEST" 2>>"$LOG" && log "Desmontado: $DEST"
+    if is_protected "$DEST"; then
+        log "Omitido (ruta protegida, no se desmonta): $DEST"
+        return 0
+    fi
+    if is_mounted "$DEST"; then
+        run_global umount -l "$(strip_slash "$DEST")" 2>>"$LOG" && log "Desmontado: $DEST"
     fi
 }
 
-# Recorre mounts.conf ignorando comentarios (#) y líneas vacías
 each_entry() {
-    # $1 = nombre de la función a llamar con SRC DEST ENABLED
     [ -f "$CONF" ] || return 0
     while IFS='|' read -r SRC DEST ENABLED || [ -n "$SRC" ]; do
         [ -z "$SRC" ] && continue
@@ -97,45 +153,4 @@ apply_mounts() {
 
 unmount_all() {
     each_entry _unmount_cb
-}
-
-# Copia el APK a /data/local/tmp (SELinux) e instala con -t (APK debug/testOnly).
-install_manager_apk() {
-    APKFILE="$1"
-    [ -f "$APKFILE" ] || return 1
-
-    if pm path com.sdcardbind.manager >/dev/null 2>&1; then
-        log "App ya instalada"
-        return 0
-    fi
-
-    TMPAPK="/data/local/tmp/sdcard-bind-manager.apk"
-    mkdir -p /data/local/tmp 2>/dev/null
-    cp -f "$APKFILE" "$TMPAPK" || return 1
-    chmod 644 "$TMPAPK"
-    chcon u:object_r:apk_data_file:s0 "$TMPAPK" 2>/dev/null || \
-        chcon u:object_r:shell_data_file:s0 "$TMPAPK" 2>/dev/null || true
-
-    i=0
-    while ! pm list packages >/dev/null 2>&1 && [ "$i" -lt 40 ]; do
-        sleep 1
-        i=$((i + 1))
-    done
-
-    rc=1
-    if pm install -r -t -g -d --user 0 "$TMPAPK" >> "$LOG" 2>&1; then
-        rc=0
-    elif pm install -r -t -g -d "$TMPAPK" >> "$LOG" 2>&1; then
-        rc=0
-    elif cmd package install -r -t --user 0 "$TMPAPK" >> "$LOG" 2>&1; then
-        rc=0
-    fi
-
-    rm -f "$TMPAPK"
-    if [ "$rc" -eq 0 ]; then
-        log "App SD Bind Manager instalada"
-    else
-        log "FALLO pm install de $APKFILE"
-    fi
-    return $rc
 }

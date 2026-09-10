@@ -1,6 +1,5 @@
 package com.sdcardbind.manager
 
-import android.util.Base64
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,7 +12,7 @@ data class MountEntry(
     val source: String,
     val dest: String,
     val enabled: Boolean,
-    val status: String = "" // MOUNTED / UNMOUNTED / SOURCE_MISSING / ""
+    val status: String = ""
 )
 
 data class StorageVolume(
@@ -24,10 +23,8 @@ data class StorageVolume(
     val usePercent: Int
 )
 
-/** Escapa una ruta para insertarla de forma segura dentro de comillas simples de shell. */
 fun shQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
-/** La WebUI escribe rutas con '/' final; el bind mount en Android lo necesita. */
 fun normalizeDir(path: String): String {
     val p = path.trim()
     if (p.isEmpty() || p == "/") return p
@@ -35,6 +32,19 @@ fun normalizeDir(path: String): String {
 }
 
 fun dirBaseName(path: String): String = path.trim().trimEnd('/').substringAfterLast('/')
+
+/** Destinos que romperían el almacenamiento interno si se hace bind/umount. */
+fun isUnsafeDest(path: String): Boolean {
+    val p = path.trim().trimEnd('/')
+    return p in setOf(
+        "", "/",
+        "/storage", "/storage/emulated", "/storage/emulated/0",
+        "/sdcard", "/mnt/sdcard",
+        "/data", "/data/media", "/data/media/0",
+        "/mnt", "/mnt/user", "/mnt/user/0",
+        "/mnt/runtime", "/mnt/pass_through", "/mnt/media_rw"
+    )
+}
 
 object RootOps {
 
@@ -71,15 +81,23 @@ object RootOps {
     }
 
     suspend fun saveAndApply(entries: List<MountEntry>): Boolean {
-        val sb = StringBuilder("# Formato: ORIGEN|DESTINO|HABILITADO(1/0)\n")
-        entries.forEach {
-            if (it.source.isNotBlank() && it.dest.isNotBlank()) {
-                sb.append(normalizeDir(it.source)).append("|").append(normalizeDir(it.dest)).append("|")
-                    .append(if (it.enabled) "1" else "0").append("\n")
+        val body = buildString {
+            appendLine("# Formato: ORIGEN|DESTINO|HABILITADO(1/0)")
+            entries.forEach {
+                if (it.source.isBlank() || it.dest.isBlank()) return@forEach
+                if (isUnsafeDest(it.dest)) return@forEach
+                append(normalizeDir(it.source)).append("|")
+                append(normalizeDir(it.dest)).append("|")
+                append(if (it.enabled) "1" else "0").appendLine()
             }
         }
-        val b64 = Base64.encodeToString(sb.toString().toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        val cmd = "echo '$b64' | base64 -d > $CONF && sh $WEBCTL apply"
+        val cmd = buildString {
+            append("cat > ").append(CONF).append(" << 'SDBIND_EOF'\n")
+            append(body)
+            if (!body.endsWith("\n")) append('\n')
+            append("SDBIND_EOF\n")
+            append("sh ").append(WEBCTL).append(" apply")
+        }
         val result = withContext(Dispatchers.IO) { Shell.cmd(cmd).exec() }
         return result.isSuccess
     }
@@ -93,7 +111,6 @@ object RootOps {
         return exec("sh $WEBCTL log").joinToString("\n")
     }
 
-    /** Info de almacenamiento vía `df -h`, filtrando pseudo-filesystems irrelevantes. */
     suspend fun storageVolumes(): List<StorageVolume> {
         val lines = exec("df -h 2>/dev/null")
         val result = mutableListOf<StorageVolume>()

@@ -34,8 +34,8 @@ class MainActivity : ComponentActivity() {
         init {
             Shell.setDefaultBuilder(
                 Shell.Builder.create()
-                    .setFlags(Shell.FLAG_REDIRECT_STDERR)
-                    .setTimeout(15)
+                    .setFlags(Shell.FLAG_MOUNT_MASTER or Shell.FLAG_REDIRECT_STDERR)
+                    .setTimeout(20)
             )
         }
     }
@@ -82,9 +82,7 @@ fun MainScreen() {
     var log by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var snackbarMsg by remember { mutableStateOf<String?>(null) }
-
-    // Diálogo de exploración de carpetas: guarda a qué índice/campo aplica
-    var browserTarget by remember { mutableStateOf<Pair<Int, Boolean>?>(null) } // index, isSource
+    var browserTarget by remember { mutableStateOf<Pair<Int, Boolean>?>(null) }
 
     fun refreshAll() {
         scope.launch {
@@ -147,7 +145,6 @@ fun MainScreen() {
                 .verticalScroll(rememberScrollState())
         ) {
 
-            // ---- Almacenamiento ----
             SectionCard(title = "Almacenamiento") {
                 if (volumes.isEmpty()) {
                     Text("Sin datos todavía.", color = MutedColor, fontSize = 13.sp)
@@ -158,7 +155,6 @@ fun MainScreen() {
 
             Spacer(Modifier.height(12.dp))
 
-            // ---- Carpetas configuradas ----
             SectionCard(title = "Carpetas configuradas") {
                 entries.forEachIndexed { index, entry ->
                     MountRow(
@@ -190,7 +186,6 @@ fun MainScreen() {
 
             Spacer(Modifier.height(12.dp))
 
-            // ---- Detección ----
             SectionCard(title = "Detectar SD / OTG") {
                 Text(
                     "Busca tarjetas SD y unidades OTG ya montadas por el sistema.",
@@ -230,12 +225,16 @@ fun MainScreen() {
 
             Spacer(Modifier.height(12.dp))
 
-            // ---- Acciones ----
             SectionCard(title = "Acciones") {
                 Button(
                     onClick = {
                         scope.launch {
                             busy = true
+                            if (entries.any { it.dest.isNotBlank() && isUnsafeDest(it.dest) }) {
+                                snackbarMsg = "Hay un destino inseguro (raíz del almacenamiento). Elegí una subcarpeta."
+                                busy = false
+                                return@launch
+                            }
                             val ok = RootOps.saveAndApply(entries)
                             snackbarMsg = if (ok) "Guardado y montado" else "Hubo un problema, revisa el registro"
                             refreshAll()
@@ -273,7 +272,6 @@ fun MainScreen() {
 
             Spacer(Modifier.height(12.dp))
 
-            // ---- Registro ----
             SectionCard(title = "Registro") {
                 Text(
                     log.ifBlank { "(sin registros aún)" },
@@ -292,23 +290,26 @@ fun MainScreen() {
         }
     }
 
-    // ---- Diálogo selector de carpetas ----
     browserTarget?.let { (index, isSource) ->
         FolderBrowserDialog(
             startPath = if (isSource) "/mnt/media_rw" else "/storage/emulated/0",
             onDismiss = { browserTarget = null },
             onSelect = { chosen ->
                 val folder = normalizeDir(chosen)
-                entries = entries.toMutableList().also {
-                    if (index in it.indices) {
-                        val cur = it[index]
-                        it[index] = if (isSource) {
-                            val dest = if (cur.dest.isBlank()) {
-                                normalizeDir("/storage/emulated/0/${dirBaseName(chosen)}")
-                            } else cur.dest
-                            cur.copy(source = folder, dest = dest)
-                        } else {
-                            cur.copy(dest = folder)
+                if (!isSource && isUnsafeDest(folder)) {
+                    snackbarMsg = "Elegí una subcarpeta, no la raíz del almacenamiento"
+                } else {
+                    entries = entries.toMutableList().also {
+                        if (index in it.indices) {
+                            val cur = it[index]
+                            it[index] = if (isSource) {
+                                val dest = if (cur.dest.isBlank()) {
+                                    normalizeDir("/storage/emulated/0/${dirBaseName(chosen)}")
+                                } else cur.dest
+                                cur.copy(source = folder, dest = dest)
+                            } else {
+                                cur.copy(dest = folder)
+                            }
                         }
                     }
                 }
@@ -473,7 +474,6 @@ fun FolderBrowserDialog(
             Text("Elegir carpeta", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(Modifier.height(8.dp))
 
-            // Accesos rápidos
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 listOf("/storage/emulated/0", "/mnt/media_rw").forEach { shortcut ->
                     OutlinedButton(

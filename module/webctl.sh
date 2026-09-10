@@ -20,19 +20,18 @@ case "$1" in
         while IFS='|' read -r SRC DEST ENABLED || [ -n "$SRC" ]; do
             [ -z "$SRC" ] && continue
             case "$SRC" in \#*) continue ;; esac
-            if mountpoint -q "$DEST" 2>/dev/null; then
+            if is_mounted "$DEST"; then
                 ST="MOUNTED"
             elif [ -d "$SRC" ]; then
                 ST="UNMOUNTED"
             else
                 ST="SOURCE_MISSING"
             fi
-            echo "${SRC%/}/|${DEST%/}/|$ENABLED|$ST"
+            echo "$(ensure_slash "$SRC")|$(ensure_slash "$DEST")|$ENABLED|$ST"
         done < "$CONF"
         ;;
 
     detect)
-        # Lista carpetas candidatas dentro de tarjetas SD / unidades OTG montadas
         for base in /mnt/media_rw /storage /mnt/runtime/default; do
             [ -d "$base" ] || continue
             for d in "$base"/*; do
@@ -40,7 +39,6 @@ case "$1" in
                 case "$d" in
                     */emulated | */self) continue ;;
                 esac
-                # Evita listar el propio almacenamiento interno duplicado
                 REAL=$(readlink -f "$d" 2>/dev/null)
                 case "$REAL" in
                     /data/media*) continue ;;
@@ -51,7 +49,6 @@ case "$1" in
         ;;
 
     list_children)
-        # $2 = ruta a listar (para navegar subcarpetas desde la UI)
         TARGET="$2"
         [ -d "$TARGET" ] || exit 1
         for d in "$TARGET"/*; do
