@@ -140,13 +140,34 @@ fun BindApp() {
     var volumesPrimed by remember { mutableStateOf(false) }
 
     fun applyVolumes(next: List<StorageVolume>) {
-        val oldExt = volumes.filter { it.kind == VolumeKind.EXTERNAL }.map { it.path }.toSet()
+        val oldIds = volumes.filter { it.kind == VolumeKind.EXTERNAL }.map { volId(it.path) }.toSet()
         val oldKey = volumes.joinToString("|") { "${it.kind}:${it.path}" }
         val newKey = next.joinToString("|") { "${it.kind}:${it.path}" }
-        val newcomers = next.filter { it.kind == VolumeKind.EXTERNAL && it.path !in oldExt }
+        val newIds = next.filter { it.kind == VolumeKind.EXTERNAL }.map { volId(it.path) }.filter { it !in oldIds }
         volumes = next
         if (oldKey != newKey) storageGen++
-        if (volumesPrimed && newcomers.isNotEmpty()) otgPopup = newcomers.last()
+        if (volumesPrimed && newIds.isNotEmpty()) {
+            val waitFor = newIds.toSet()
+            scope.launch {
+                var best: StorageVolume? = null
+                repeat(6) {
+                    kotlinx.coroutines.delay(450)
+                    val latest = RootOps.storageVolumes()
+                    volumes = latest
+                    best = latest.filter { it.kind == VolumeKind.EXTERNAL && volId(it.path) in waitFor }
+                        .sortedWith(
+                            compareByDescending<StorageVolume> { it.path.contains("media_rw") }
+                                .thenByDescending { humanToBytes(it.totalHuman) }
+                        )
+                        .firstOrNull()
+                    if (best != null && humanToBytes(best!!.totalHuman) >= 16L * 1024 * 1024) {
+                        otgPopup = best
+                        return@launch
+                    }
+                }
+                if (best != null) otgPopup = best
+            }
+        }
         volumesPrimed = true
     }
 
@@ -352,6 +373,7 @@ fun BindApp() {
 @Composable
 private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     LaunchedEffect(vol?.path) {
         if (vol != null) {
             kotlinx.coroutines.delay(8000)
@@ -360,23 +382,34 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
     }
     AnimatedVisibility(
         visible = vol != null,
-        enter = fadeIn(tween(200)) + slideInVertically(tween(480, easing = FastOutSlowInEasing)) { it },
-        exit = fadeOut(tween(180)) + slideOutVertically(tween(280, easing = FastOutSlowInEasing)) { it }
+        enter = fadeIn(tween(200)) + slideInVertically(tween(480, easing = FastOutSlowInEasing)) { it / 2 },
+        exit = fadeOut(tween(180)) + slideOutVertically(tween(280, easing = FastOutSlowInEasing)) { it / 2 }
     ) {
         val shown = vol ?: return@AnimatedVisibility
+        val id = volId(shown.path)
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .background(Color.Black.copy(alpha = if (landscape) 0.38f else 0.45f))
                     .clickable(onClick = onDismiss)
             )
             Column(
                 Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .fillMaxWidth()
+                    .then(
+                        if (landscape) {
+                            Modifier
+                                .align(Alignment.Center)
+                                .widthIn(max = 400.dp)
+                                .fillMaxWidth(0.46f)
+                        } else {
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        }
+                    )
                     .clip(RoundedCornerShape(32.dp))
                     .background(cs.surfaceContainerHigh)
                     .padding(horizontal = 20.dp, vertical = 18.dp),
@@ -384,7 +417,7 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
             ) {
                 Box(Modifier.fillMaxWidth()) {
                     Text(
-                        shown.label,
+                        if (id.isBlank()) "OTG" else id,
                         color = cs.onSurface,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
@@ -397,11 +430,11 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
                         Icon(Icons.Filled.Close, contentDescription = "Cerrar", tint = cs.onSurfaceVariant)
                     }
                 }
-                Text("Unidad de almacenamiento", color = cs.onSurfaceVariant, fontSize = 13.sp)
+                Text("Unidad USB conectada", color = cs.onSurfaceVariant, fontSize = 13.sp)
                 Spacer(Modifier.height(12.dp))
                 Box(
                     Modifier
-                        .size(200.dp)
+                        .size(if (landscape) 140.dp else 200.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(Color(0xFF141414)),
                     contentAlignment = Alignment.Center

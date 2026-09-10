@@ -43,7 +43,23 @@ fun normalizeDir(path: String): String {
     return if (p.endsWith("/")) p else "$p/"
 }
 
-fun dirBaseName(path: String): String = path.trim().trimEnd('/').substringAfterLast('/')
+fun volId(path: String): String = path.trimEnd('/').substringAfterLast('/')
+
+fun dirBaseName(path: String): String = volId(path)
+
+fun humanToBytes(s: String): Long {
+    val t = s.trim().uppercase().replace(",", ".")
+    val num = t.takeWhile { it.isDigit() || it == '.' }.toDoubleOrNull() ?: return 0L
+    val unit = t.dropWhile { it.isDigit() || it == '.' }
+    val mul = when {
+        unit.startsWith("T") -> 1024.0 * 1024 * 1024 * 1024
+        unit.startsWith("G") -> 1024.0 * 1024 * 1024
+        unit.startsWith("M") -> 1024.0 * 1024
+        unit.startsWith("K") -> 1024.0
+        else -> 1.0
+    }
+    return (num * mul).toLong()
+}
 
 /** Destinos que romperían el almacenamiento interno si se hace bind/umount. */
 fun isUnsafeDest(path: String): Boolean {

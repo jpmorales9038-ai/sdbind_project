@@ -155,13 +155,16 @@ unmount_all() {
     each_entry _unmount_cb
 }
 
-# Una línea: SIZE|USED|AVAIL|PERCENT  (df -P evita el wrap de toybox)
+# Una línea: SIZE|USED|AVAIL|PERCENT  — solo si $1 ES un mountpoint real
 df_stats() {
-    mp="$1"
+    mp=$(strip_slash "$1")
     [ -e "$mp" ] || return 1
+    awk -v p="$mp" '$2 == p { found=1 } END { exit !found }' /proc/1/mounts 2>/dev/null || return 1
     line=$(df -Ph "$mp" 2>/dev/null | awk 'NR==2 {print}')
     [ -n "$line" ] || line=$(df -h "$mp" 2>/dev/null | awk 'NR==2 {print}')
     [ -n "$line" ] || return 1
+    reported=$(echo "$line" | awk '{print $NF}')
+    [ "$reported" = "$mp" ] || [ "$reported" = "$mp/" ] || return 1
     echo "$line" | awk '{
         gsub(/%/, "", $(NF-1))
         print $(NF-4) "|" $(NF-3) "|" $(NF-2) "|" $(NF-1)
