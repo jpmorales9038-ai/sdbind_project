@@ -60,7 +60,7 @@ h1 { font-size: 32px; margin: 0; font-weight: 700; }
   stroke-dashoffset: 0;
   transform: rotate(-90deg);
   transform-origin: 50px 50px;
-  transition: stroke-dasharray .7s ease;
+  transition: stroke-dasharray .9s ease;
 }
 .ring.secondary .arc { stroke: var(--secondary, #c48aa8); }
 .ring text { font-size: 14px; font-weight: 700; fill: var(--text); }
@@ -147,6 +147,7 @@ h2 { font-size: 18px; margin: 0 0 12px; }
   border: 0; border-radius: 999px; padding: 10px 18px;
   background: var(--surface-2); color: var(--muted);
   font-weight: 600; cursor: pointer;
+  transition: background-color .35s ease, color .35s ease;
 }
 .navchip.on { background: var(--primary); color: var(--on-primary); }
 
@@ -189,7 +190,7 @@ h2 { font-size: 18px; margin: 0 0 12px; }
   transform: translate(-50%, 12px);
   background: var(--surface-2); color: var(--text);
   padding: 10px 16px; border-radius: 12px; font-size: 13px;
-  opacity: 0; transition: .25s; pointer-events: none; max-width: 90%; text-align: center;
+  opacity: 0; transition: opacity .4s ease, transform .4s ease; pointer-events: none; max-width: 90%; text-align: center;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
@@ -258,6 +259,14 @@ h2 { font-size: 18px; margin: 0 0 12px; }
   font-size: 18px; font-weight: 700; margin-bottom: 12px;
 }
 .tool-wide .tool-ico { margin-bottom: 0; flex-shrink: 0; }
+.lang-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+.lang-row button {
+  border: 0; border-radius: 999px; padding: 8px 14px;
+  background: var(--surface-2); color: var(--text);
+  font-weight: 600; cursor: pointer;
+  transition: background-color .35s ease, color .35s ease;
+}
+.lang-row button.on { background: var(--primary); color: var(--on-primary); }
 
 @media (orientation: landscape) {
   #app { padding: 12px 16px 16px 88px; }

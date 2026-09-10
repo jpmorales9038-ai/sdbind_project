@@ -33,26 +33,26 @@ object Updater {
         withContext(Dispatchers.IO) {
             val repo = configuredRepo()
             val body = httpGet("https://api.github.com/repos/$repo/releases/latest")
-                ?: return@withContext UpdateOutcome.Info("No se pudo hablar con GitHub")
+                ?: return@withContext UpdateOutcome.Info(context.getString(R.string.update_no_github))
             val json = JSONObject(body)
             if (json.has("message") && !json.has("tag_name")) {
                 val msg = json.optString("message")
                 return@withContext UpdateOutcome.Info(
                     if (msg.contains("Not Found", true))
-                        "Todavía no hay releases. Subí este código a GitHub y esperá a que Actions publique uno."
+                        context.getString(R.string.update_no_releases)
                     else msg
                 )
             }
             val tag = json.optString("tag_name").ifBlank { json.optString("name") }
             if (!isNewer(tag, localVersion)) {
-                return@withContext UpdateOutcome.Info("Ya estás al día ($localVersion)")
+                return@withContext UpdateOutcome.Info(context.getString(R.string.update_up_to_date, localVersion))
             }
             val zipUrl = findAsset(json, ".zip")
-                ?: return@withContext UpdateOutcome.Info("La release $tag no trae un .zip")
+                ?: return@withContext UpdateOutcome.Info(context.getString(R.string.update_no_zip, tag))
             val dest = File(context.cacheDir, "sdbind_update.zip")
             httpDownload(zipUrl, dest)
             if (!dest.exists() || dest.length() < 1024) {
-                return@withContext UpdateOutcome.Info("La descarga quedó vacía")
+                return@withContext UpdateOutcome.Info(context.getString(R.string.update_empty))
             }
             Shell.cmd(
                 "cp ${shQuote(dest.absolutePath)} /storage/emulated/0/Download/sdbind_update.zip && " +
@@ -87,9 +87,9 @@ object Updater {
         ).forEach { pkg ->
             runCatching { context.grantUriPermission(pkg, uri, flags) }
         }
-        val chooser = Intent.createChooser(view, "Flashear el módulo con").apply {
+        val chooser = Intent.createChooser(view, context.getString(R.string.flash_with)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            putExtra(Intent.EXTRA_TITLE, "Flashear el módulo con")
+            putExtra(Intent.EXTRA_TITLE, context.getString(R.string.flash_with))
         }
         context.startActivity(chooser)
     }

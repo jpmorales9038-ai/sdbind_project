@@ -28,6 +28,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -72,6 +74,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -109,23 +112,25 @@ class MainActivity : ComponentActivity() {
             AppTheme { BindApp() }
         }
     }
+
+    override fun attachBaseContext(newBase: Context?) {
+        super.attachBaseContext(newBase?.let { Lang.wrap(it) })
+    }
 }
 
 private enum class Tab { Home, Log, About }
 private enum class Flow { Home, PickSource, PickDest }
 
-private val spatial = spring<IntOffset>(
-    dampingRatio = Spring.DampingRatioLowBouncy,
-    stiffness = Spring.StiffnessMediumLow
-)
+private val spatial = tween<IntOffset>(420, easing = FastOutSlowInEasing)
 private val sizeSpring = spring<IntSize>(
-    dampingRatio = Spring.DampingRatioLowBouncy,
+    dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = Spring.StiffnessMediumLow
 )
 private val floatSpring = spring<Float>(
-    dampingRatio = Spring.DampingRatioLowBouncy,
+    dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = Spring.StiffnessMediumLow
 )
+private val colorTween = tween<Color>(360, easing = FastOutSlowInEasing)
 
 @Composable
 fun BindApp() {
@@ -138,7 +143,15 @@ fun BindApp() {
     var storageGen by remember { mutableIntStateOf(0) }
     var log by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var tab by remember { mutableStateOf(Tab.Home) }
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
+    val goTab: (Tab) -> Unit = { t ->
+        scope.launch {
+            pagerState.animateScrollToPage(
+                t.ordinal,
+                animationSpec = tween(420, easing = FastOutSlowInEasing)
+            )
+        }
+    }
     var flow by remember { mutableStateOf(Flow.Home) }
     var pendingSource by remember { mutableStateOf("") }
     var snack by remember { mutableStateOf<String?>(null) }
@@ -191,7 +204,7 @@ fun BindApp() {
             applyVolumes(RootOps.storageVolumes())
             log = RootOps.tailLog()
             if (forceAnim) storageGen++
-            if (showSnack) snack = "Almacenamiento actualizado"
+            if (showSnack) snack = context.getString(R.string.storage_updated)
         }
     }
 
@@ -254,13 +267,12 @@ fun BindApp() {
     }
 
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val currentTab = Tab.entries.getOrElse(pagerState.currentPage) { Tab.Home }
     val screen = when {
         rootOk == false -> "noroot"
         flow == Flow.PickSource -> "src"
         flow == Flow.PickDest -> "dst"
-        tab == Tab.Log -> "log"
-        tab == Tab.About -> "about"
-        else -> "home"
+        else -> "tabs"
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -277,7 +289,7 @@ fun BindApp() {
         },
         floatingActionButton = {
             AnimatedVisibility(
-                visible = screen == "home" && rootOk == true,
+                visible = screen == "tabs" && currentTab == Tab.Home && rootOk == true,
                 enter = scaleIn(floatSpring) + fadeIn(),
                 exit = scaleOut() + fadeOut()
             ) {
@@ -286,22 +298,22 @@ fun BindApp() {
                     containerColor = cs.primaryContainer,
                     contentColor = cs.onPrimaryContainer,
                     shape = CircleShape
-                ) { Icon(Icons.Filled.Add, contentDescription = "Añadir vínculo") }
+                ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_bind)) }
             }
         },
         bottomBar = {
             AnimatedVisibility(
-                visible = !landscape && (screen == "home" || screen == "log" || screen == "about") && rootOk == true,
+                visible = !landscape && screen == "tabs" && rootOk == true,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut()
             ) {
-                BottomNav(tab = tab, onTab = { tab = it })
+                BottomNav(tab = currentTab, onTab = goTab)
             }
         }
     ) { pad ->
         Row(Modifier.fillMaxSize().padding(pad)) {
-            if (landscape && (screen == "home" || screen == "log" || screen == "about") && rootOk == true) {
-                SideRail(tab = tab, onTab = { tab = it })
+            if (landscape && screen == "tabs" && rootOk == true) {
+                SideRail(tab = currentTab, onTab = goTab)
             }
             AnimatedContent(
                 targetState = screen,
@@ -309,11 +321,11 @@ fun BindApp() {
             transitionSpec = {
                 val forward = targetState == "src" || (initialState == "src" && targetState == "dst")
                 if (forward) {
-                    (slideInHorizontally(spatial) { it } + fadeIn(tween(220))) togetherWith
-                        (slideOutHorizontally(spatial) { -it / 4 } + fadeOut(tween(180)))
+                    (slideInHorizontally(spatial) { it } + fadeIn(tween(380, easing = FastOutSlowInEasing))) togetherWith
+                        (slideOutHorizontally(spatial) { -it / 5 } + fadeOut(tween(280, easing = FastOutSlowInEasing)))
                 } else {
-                    (slideInHorizontally(spatial) { -it / 4 } + fadeIn(tween(220))) togetherWith
-                        (slideOutHorizontally(spatial) { it } + fadeOut(tween(180)))
+                    (slideInHorizontally(spatial) { -it / 5 } + fadeIn(tween(380, easing = FastOutSlowInEasing))) togetherWith
+                        (slideOutHorizontally(spatial) { it } + fadeOut(tween(280, easing = FastOutSlowInEasing)))
                 }.using(SizeTransform(clip = false))
             },
             label = "screen"
@@ -321,10 +333,10 @@ fun BindApp() {
             when (s) {
                 "noroot" -> NoRoot()
                 "src" -> FolderPickerScreen(
-                    title = "Origen",
-                    hint = "Carpeta de la tarjeta o unidad que querés montar",
+                    title = stringResource(R.string.source_title),
+                    hint = stringResource(R.string.source_hint),
                     startPath = "/mnt/media_rw",
-                    confirmLabel = "Siguiente",
+                    confirmLabel = stringResource(R.string.next),
                     onBack = { flow = Flow.Home },
                     onPicked = { path ->
                         pendingSource = normalizeDir(path)
@@ -332,22 +344,23 @@ fun BindApp() {
                     }
                 )
                 "dst" -> FolderPickerScreen(
-                    title = "Destino",
-                    hint = "Carpeta del almacenamiento interno donde se va a ver",
+                    title = stringResource(R.string.dest_title),
+                    hint = stringResource(R.string.dest_hint),
                     startPath = "/storage/emulated/0",
-                    confirmLabel = "Vincular y montar",
+                    confirmLabel = stringResource(R.string.link_and_mount),
                     rejectRoot = true,
                     onBack = { flow = Flow.PickSource },
                     onPicked = { path ->
                         val dest = normalizeDir(path)
                         if (isUnsafeDest(dest)) {
-                            snack = "Elegí una subcarpeta, no la raíz"
+                            snack = context.getString(R.string.pick_subfolder)
                         } else {
                             scope.launch {
                                 busy = true
                                 val next = entries + MountEntry(pendingSource, dest, true)
                                 val ok = RootOps.saveAndApply(next)
-                                snack = if (ok) "Montado en $dest" else "Error al montar, mirá el registro"
+                                snack = if (ok) context.getString(R.string.mounted_in, dest)
+                                else context.getString(R.string.mount_error)
                                 refresh()
                                 busy = false
                                 flow = Flow.Home
@@ -355,67 +368,78 @@ fun BindApp() {
                         }
                     }
                 )
-                "log" -> LogPane(log)
-                "about" -> AboutPane(
-                    busy = busy,
-                    onCheck = {
-                        scope.launch {
-                            busy = true
-                            snack = "Buscando actualizaciones..."
-                            val ver = runCatching {
-                                context.packageManager.getPackageInfo(context.packageName, 0).versionName
-                            }.getOrNull() ?: "2.5.3"
-                            when (val out = Updater.checkAndDownload(context, ver ?: "2.5.3")) {
-                                is UpdateOutcome.Info -> snack = out.message
-                                is UpdateOutcome.Ready -> {
-                                    snack = "${out.tag} descargada. Elegí con qué flashearla."
-                                    runCatching { Updater.openForFlash(context, out.zip) }
-                                        .onFailure { snack = "Guardada en Descargas/sdbind_update.zip" }
+                else -> HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = true
+                ) { page ->
+                    when (page) {
+                        1 -> LogPane(log)
+                        2 -> AboutPane(
+                            busy = busy,
+                            onCheck = {
+                                scope.launch {
+                                    busy = true
+                                    snack = context.getString(R.string.checking_updates)
+                                    val ver = runCatching {
+                                        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                                    }.getOrNull() ?: "2.5.3"
+                                    when (val out = Updater.checkAndDownload(context, ver ?: "2.5.3")) {
+                                        is UpdateOutcome.Info -> snack = out.message
+                                        is UpdateOutcome.Ready -> {
+                                            snack = context.getString(R.string.update_ready, out.tag)
+                                            runCatching { Updater.openForFlash(context, out.zip) }
+                                                .onFailure {
+                                                    snack = context.getString(R.string.update_saved_downloads)
+                                                }
+                                        }
+                                    }
+                                    busy = false
                                 }
                             }
-                            busy = false
-                        }
+                        )
+                        else -> HomePane(
+                            volumes = volumes,
+                            entries = entries,
+                            busy = busy,
+                            landscape = landscape,
+                            playToken = storageGen,
+                            onRefreshStorage = { refresh(true) },
+                            onDelete = { i -> pendingDelete = entries.getOrNull(i) },
+                            onApply = {
+                                scope.launch {
+                                    busy = true
+                                    popupQuietUntil = System.currentTimeMillis() + 8000
+                                    val ok = RootOps.saveAndApply(entries)
+                                    snack = if (ok) context.getString(R.string.binds_applied)
+                                    else context.getString(R.string.mount_failed)
+                                    refresh()
+                                    busy = false
+                                }
+                            },
+                            onUnmount = {
+                                scope.launch {
+                                    busy = true
+                                    popupQuietUntil = System.currentTimeMillis() + 8000
+                                    RootOps.unmountAll()
+                                    refresh()
+                                    busy = false
+                                }
+                            }
+                        )
                     }
-                )
-                else -> HomePane(
-                    volumes = volumes,
-                    entries = entries,
-                    busy = busy,
-                    landscape = landscape,
-                    playToken = storageGen,
-                    onRefreshStorage = { refresh(true) },
-                    onDelete = { i -> pendingDelete = entries.getOrNull(i) },
-                    onApply = {
-                        scope.launch {
-                            busy = true
-                            popupQuietUntil = System.currentTimeMillis() + 8000
-                            val ok = RootOps.saveAndApply(entries)
-                            snack = if (ok) "Vínculos aplicados" else "Error al montar"
-                            refresh()
-                            busy = false
-                        }
-                    },
-                    onUnmount = {
-                        scope.launch {
-                            busy = true
-                            popupQuietUntil = System.currentTimeMillis() + 8000
-                            RootOps.unmountAll()
-                            refresh()
-                            busy = false
-                        }
-                    }
-                )
+                }
             }
         }
         }
     }
     OtgConnectPopup(vol = otgPopup, onDismiss = { otgPopup = null })
     pendingDelete?.let { entry ->
-        val name = dirBaseName(entry.dest).ifBlank { dirBaseName(entry.source).ifBlank { "este vínculo" } }
+        val name = dirBaseName(entry.dest).ifBlank { dirBaseName(entry.source).ifBlank { context.getString(R.string.this_bind) } }
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("Eliminar vínculo") },
-            text = { Text("Se borra «$name» de forma permanente y se desmonta si está montado.") },
+            title = { Text(stringResource(R.string.delete_bind)) },
+            text = { Text(stringResource(R.string.delete_bind_body, name)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -428,15 +452,16 @@ fun BindApp() {
                             }
                             entries = remaining
                             val ok = RootOps.removeMount(entry.source, entry.dest)
-                            snack = if (ok) "Vínculo eliminado" else "No se pudo eliminar"
+                            snack = if (ok) context.getString(R.string.bind_deleted)
+                            else context.getString(R.string.bind_delete_failed)
                             refresh()
                             busy = false
                         }
                     }
-                ) { Text("Eliminar", color = cs.error) }
+                ) { Text(stringResource(R.string.delete), color = cs.error) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("Cancelar") }
+                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -455,8 +480,10 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
     }
     AnimatedVisibility(
         visible = vol != null,
-        enter = fadeIn(tween(200)) + slideInVertically(tween(480, easing = FastOutSlowInEasing)) { it / 2 },
-        exit = fadeOut(tween(180)) + slideOutVertically(tween(280, easing = FastOutSlowInEasing)) { it / 2 }
+        enter = fadeIn(tween(320, easing = FastOutSlowInEasing)) +
+            slideInVertically(tween(520, easing = FastOutSlowInEasing)) { it / 3 },
+        exit = fadeOut(tween(260, easing = FastOutSlowInEasing)) +
+            slideOutVertically(tween(360, easing = FastOutSlowInEasing)) { it / 3 }
     ) {
         val shown = vol ?: return@AnimatedVisibility
         val id = volId(shown.path)
@@ -500,10 +527,10 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
                         onClick = onDismiss,
                         modifier = Modifier.align(Alignment.CenterEnd).size(36.dp)
                     ) {
-                        Icon(Icons.Filled.Close, contentDescription = "Cerrar", tint = cs.onSurfaceVariant)
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.close), tint = cs.onSurfaceVariant)
                     }
                 }
-                Text("Unidad USB conectada", color = cs.onSurfaceVariant, fontSize = 13.sp)
+                Text(stringResource(R.string.usb_connected), color = cs.onSurfaceVariant, fontSize = 13.sp)
                 Spacer(Modifier.height(12.dp))
                 Box(
                     Modifier
@@ -536,20 +563,20 @@ private fun SideRail(tab: Tab, onTab: (Tab) -> Unit) {
         NavigationRailItem(
             selected = tab == Tab.Home,
             onClick = { onTab(Tab.Home) },
-            icon = { Icon(Icons.Filled.Home, contentDescription = "Inicio") },
-            label = { Text("Inicio") }
+            icon = { Icon(Icons.Filled.Home, contentDescription = stringResource(R.string.tab_home)) },
+            label = { Text(stringResource(R.string.tab_home)) }
         )
         NavigationRailItem(
             selected = tab == Tab.Log,
             onClick = { onTab(Tab.Log) },
-            icon = { Icon(Icons.Filled.Notes, contentDescription = "Registro") },
-            label = { Text("Registro") }
+            icon = { Icon(Icons.Filled.Notes, contentDescription = stringResource(R.string.tab_log)) },
+            label = { Text(stringResource(R.string.tab_log)) }
         )
         NavigationRailItem(
             selected = tab == Tab.About,
             onClick = { onTab(Tab.About) },
-            icon = { Icon(Icons.Filled.Info, contentDescription = "Acerca de") },
-            label = { Text("Acerca") }
+            icon = { Icon(Icons.Filled.Info, contentDescription = stringResource(R.string.tab_about)) },
+            label = { Text(stringResource(R.string.tab_about_short)) }
         )
     }
 }
@@ -569,9 +596,9 @@ private fun BottomNav(tab: Tab, onTab: (Tab) -> Unit) {
                 .animateContentSize(sizeSpring),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            NavChip("Inicio", Icons.Filled.Home, tab == Tab.Home) { onTab(Tab.Home) }
-            NavChip("Registro", Icons.Filled.Notes, tab == Tab.Log) { onTab(Tab.Log) }
-            NavChip("Acerca de", Icons.Filled.Info, tab == Tab.About) { onTab(Tab.About) }
+            NavChip(stringResource(R.string.tab_home), Icons.Filled.Home, tab == Tab.Home) { onTab(Tab.Home) }
+            NavChip(stringResource(R.string.tab_log), Icons.Filled.Notes, tab == Tab.Log) { onTab(Tab.Log) }
+            NavChip(stringResource(R.string.tab_about), Icons.Filled.Info, tab == Tab.About) { onTab(Tab.About) }
         }
     }
 }
@@ -581,10 +608,12 @@ private fun NavChip(label: String, icon: ImageVector, selected: Boolean, onClick
     val cs = MaterialTheme.colorScheme
     val bg by animateColorAsState(
         if (selected) cs.secondaryContainer else cs.surfaceContainerHigh,
+        animationSpec = colorTween,
         label = "navBg"
     )
     val fg by animateColorAsState(
         if (selected) cs.onSecondaryContainer else cs.onSurfaceVariant,
+        animationSpec = colorTween,
         label = "navFg"
     )
     Row(
@@ -616,9 +645,9 @@ private fun NoRoot() {
     ) {
         Icon(Icons.Filled.Lock, null, tint = cs.error, modifier = Modifier.size(48.dp))
         Spacer(Modifier.height(16.dp))
-        Text("Sin acceso root", color = cs.onBackground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.no_root), color = cs.onBackground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        Text("Concedé el permiso cuando KernelSU lo pida y volvé a abrir la app.", color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.no_root_hint), color = cs.onSurfaceVariant)
     }
 }
 
@@ -678,7 +707,7 @@ private fun HomeHeader() {
         Box(
             Modifier.clip(CircleShape).background(cs.tertiaryContainer).padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
-            Text("root ok", color = cs.onTertiaryContainer, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.root_ok), color = cs.onTertiaryContainer, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -689,7 +718,7 @@ private fun BindList(
     onDelete: (Int) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
-    Text("Vínculos", color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    Text(stringResource(R.string.binds), color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     Spacer(Modifier.height(12.dp))
     if (entries.isEmpty()) {
         Box(
@@ -699,8 +728,8 @@ private fun BindList(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Outlined.Folder, null, tint = cs.primary, modifier = Modifier.size(36.dp))
                 Spacer(Modifier.height(10.dp))
-                Text("Nada vinculado todavía", color = cs.onSurface, fontWeight = FontWeight.Medium)
-                Text("Tocá + y elegí origen y destino", color = cs.onSurfaceVariant, fontSize = 13.sp)
+                Text(stringResource(R.string.nothing_bound), color = cs.onSurface, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.nothing_bound_hint), color = cs.onSurfaceVariant, fontSize = 13.sp)
             }
         }
     } else {
@@ -719,10 +748,10 @@ private fun ActionButtons(busy: Boolean, hasEntries: Boolean, onApply: () -> Uni
         enabled = !busy && hasEntries,
         modifier = Modifier.fillMaxWidth().height(52.dp),
         shape = MaterialTheme.shapes.large
-    ) { Text("Guardar y montar", fontWeight = FontWeight.Bold) }
+    ) { Text(stringResource(R.string.save_mount), fontWeight = FontWeight.Bold) }
     Spacer(Modifier.height(8.dp))
     TextButton(onClick = onUnmount, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-        Text("Desmontar todo", color = cs.error)
+        Text(stringResource(R.string.unmount_all), color = cs.error)
     }
 }
 
@@ -739,10 +768,10 @@ private fun StorageHero(volumes: List<StorageVolume>, playToken: Int, onRefresh:
             .padding(20.dp)
             .animateContentSize(sizeSpring)
     ) {
-        Text("Almacenamiento", color = cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(stringResource(R.string.storage), color = cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(16.dp))
         if (volumes.isEmpty()) {
-            Text("Mantené pulsado para actualizar", color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.long_press_refresh), color = cs.onSurfaceVariant)
         } else {
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -783,12 +812,21 @@ private fun StorageCell(
                 modifier = Modifier.size(14.dp)
             )
             Spacer(Modifier.width(4.dp))
-            Text(if (empty) "SD / OTG" else vol.label, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val volLabel = when {
+                empty -> stringResource(R.string.sd_otg)
+                vol.kind == VolumeKind.INTERNAL -> stringResource(R.string.internal)
+                else -> {
+                    val id = vol.path.trimEnd('/').substringAfterLast('/')
+                    if (id.isBlank() || id == "media_rw") stringResource(R.string.sd_otg)
+                    else stringResource(R.string.sd_named, id)
+                }
+            }
+            Text(volLabel, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (empty) {
-            Text("Sin unidad", color = cs.onSurfaceVariant, fontSize = 13.sp)
+            Text(stringResource(R.string.no_drive), color = cs.onSurfaceVariant, fontSize = 13.sp)
         } else {
-            Text("${vol.availHuman} libres", color = cs.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.free_fmt, vol.availHuman), color = cs.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Text("${vol.usedHuman} / ${vol.totalHuman}", color = cs.onSurfaceVariant, fontSize = 11.sp)
         }
     }
@@ -804,9 +842,9 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
         if (playToken != lastToken) {
             lastToken = playToken
             anim.snapTo(0f)
-            anim.animateTo(t, tween(700, easing = FastOutSlowInEasing))
+            anim.animateTo(t, tween(900, easing = FastOutSlowInEasing))
         } else {
-            anim.animateTo(t, tween(700, easing = FastOutSlowInEasing))
+            anim.animateTo(t, tween(900, easing = FastOutSlowInEasing))
         }
     }
     val animated = anim.value
@@ -835,7 +873,7 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
 @Composable
 private fun BindCard(entry: MountEntry, onDelete: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val name = dirBaseName(entry.dest).ifBlank { dirBaseName(entry.source).ifBlank { "vínculo" } }
+    val name = dirBaseName(entry.dest).ifBlank { dirBaseName(entry.source).ifBlank { stringResource(R.string.bind_fallback) } }
     Row(
         Modifier
             .fillMaxWidth()
@@ -854,8 +892,8 @@ private fun BindCard(entry: MountEntry, onDelete: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(name, color = cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(entry.source.ifBlank { "sin origen" }, color = cs.onSurfaceVariant, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("→ ${entry.dest.ifBlank { "sin destino" }}", color = cs.primary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(entry.source.ifBlank { stringResource(R.string.no_source) }, color = cs.onSurfaceVariant, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("→ ${entry.dest.ifBlank { stringResource(R.string.no_dest) }}", color = cs.primary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(4.dp))
             StatusChip(entry.status)
         }
@@ -869,10 +907,10 @@ private fun BindCard(entry: MountEntry, onDelete: () -> Unit) {
 private fun StatusChip(status: String) {
     val cs = MaterialTheme.colorScheme
     val (label, bg, fg) = when (status) {
-        "MOUNTED" -> Triple("montado", cs.tertiaryContainer, cs.onTertiaryContainer)
-        "UNMOUNTED" -> Triple("no montado", cs.secondaryContainer, cs.onSecondaryContainer)
-        "SOURCE_MISSING" -> Triple("origen ausente", cs.errorContainer, cs.onErrorContainer)
-        else -> Triple("sin comprobar", cs.surfaceContainerHighest, cs.onSurfaceVariant)
+        "MOUNTED" -> Triple(stringResource(R.string.status_mounted), cs.tertiaryContainer, cs.onTertiaryContainer)
+        "UNMOUNTED" -> Triple(stringResource(R.string.status_unmounted), cs.secondaryContainer, cs.onSecondaryContainer)
+        "SOURCE_MISSING" -> Triple(stringResource(R.string.status_missing), cs.errorContainer, cs.onErrorContainer)
+        else -> Triple(stringResource(R.string.status_unknown), cs.surfaceContainerHighest, cs.onSurfaceVariant)
     }
     Text(
         label,
@@ -973,7 +1011,7 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
     ) {
         Spacer(Modifier.height(12.dp))
-        Text("Acerca de", color = cs.onBackground, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.about), color = cs.onBackground, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(20.dp))
         Column(
             Modifier
@@ -986,10 +1024,14 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             AppMark(Modifier.size(iconDp))
             Spacer(Modifier.height(16.dp))
             Text("SD Bind", color = cs.onSurface, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text("versión $ver", color = cs.onSurfaceVariant, fontSize = 14.sp)
+            Text(stringResource(R.string.version_fmt, ver ?: "2.5.3"), color = cs.onSurfaceVariant, fontSize = 14.sp)
         }
         Spacer(Modifier.height(24.dp))
-        Text("Herramientas", color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.language), color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+        LanguageRow()
+        Spacer(Modifier.height(24.dp))
+        Text(stringResource(R.string.tools), color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
         Row(
             Modifier
@@ -1007,9 +1049,9 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("Actualizaciones", color = cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Text(stringResource(R.string.updates), color = cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 Text(
-                    "Si hay una versión nueva, descarga el zip y te pregunta con qué app flashearlo (KernelSU).",
+                    stringResource(R.string.updates_desc),
                     color = cs.onSurfaceVariant,
                     fontSize = 12.sp
                 )
@@ -1024,7 +1066,7 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
                 if (busy) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = cs.onPrimary)
                 } else {
-                    Text("Buscar")
+                    Text(stringResource(R.string.search))
                 }
             }
         }
@@ -1033,14 +1075,14 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             AboutMiniCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Filled.Folder,
-                title = "Vínculos",
-                body = "Montá carpetas de SD u OTG dentro del interno"
+                title = stringResource(R.string.card_binds),
+                body = stringResource(R.string.card_binds_desc)
             )
             AboutMiniCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Filled.Build,
-                title = "Módulo",
-                body = "KernelSU con WebUI de respaldo"
+                title = stringResource(R.string.card_module),
+                body = stringResource(R.string.card_module_desc)
             )
         }
         Spacer(Modifier.height(10.dp))
@@ -1048,17 +1090,48 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             AboutMiniCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Filled.FolderOpen,
-                title = "Explorador",
-                body = "Elegí origen y destino tocando +"
+                title = stringResource(R.string.card_explorer),
+                body = stringResource(R.string.card_explorer_desc)
             )
             AboutMiniCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Filled.ColorLens,
-                title = "Material You",
-                body = "Colores y formas dinámicos del sistema"
+                title = stringResource(R.string.card_material),
+                body = stringResource(R.string.card_material_desc)
             )
         }
         Spacer(Modifier.height(96.dp))
+    }
+}
+
+@Composable
+private fun LanguageRow() {
+    val ctx = LocalContext.current
+    val current = remember { Lang.current(ctx) }
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        listOf(
+            Lang.SYSTEM to stringResource(R.string.lang_system),
+            Lang.ES to stringResource(R.string.lang_es),
+            Lang.ES_ES to stringResource(R.string.lang_es_es),
+            Lang.EN to stringResource(R.string.lang_en)
+        ).forEach { (tag, label) ->
+            val on = current == tag
+            Text(
+                label,
+                color = if (on) cs.onSecondaryContainer else cs.onSurface,
+                fontSize = 13.sp,
+                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(if (on) cs.secondaryContainer else cs.surfaceContainerHigh)
+                    .clickable { if (!on) Lang.set(ctx, tag) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            )
+        }
     }
 }
 
@@ -1089,7 +1162,7 @@ private fun AboutMiniCard(modifier: Modifier, icon: ImageVector, title: String, 
 private fun LogPane(log: String) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Text("Registro", color = cs.onBackground, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.log), color = cs.onBackground, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
         Box(
             Modifier
@@ -1099,7 +1172,7 @@ private fun LogPane(log: String) {
                 .padding(16.dp)
         ) {
             Text(
-                log.ifBlank { "(sin registros aún)" },
+                log.ifBlank { stringResource(R.string.log_empty) },
                 color = cs.tertiary,
                 fontSize = 11.sp,
                 modifier = Modifier.verticalScroll(rememberScrollState())
@@ -1148,9 +1221,9 @@ private fun FolderPickerScreen(
             Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ShortcutChip("Interno", Icons.Outlined.Smartphone) { current = "/storage/emulated/0" }
+            ShortcutChip(stringResource(R.string.internal), Icons.Outlined.Smartphone) { current = "/storage/emulated/0" }
             Spacer(Modifier.width(8.dp))
-            ShortcutChip("SD / OTG", Icons.Outlined.SdCard) { current = "/mnt/media_rw" }
+            ShortcutChip(stringResource(R.string.sd_otg), Icons.Outlined.SdCard) { current = "/mnt/media_rw" }
         }
 
         Spacer(Modifier.height(10.dp))
@@ -1169,7 +1242,7 @@ private fun FolderPickerScreen(
             }) {
                 Icon(Icons.Filled.ArrowUpward, null, modifier = Modifier.size(16.dp), tint = cs.primary)
                 Spacer(Modifier.width(6.dp))
-                Text("Subir un nivel", color = cs.primary)
+                Text(stringResource(R.string.up_one_level), color = cs.primary)
             }
         }
 
@@ -1180,7 +1253,7 @@ private fun FolderPickerScreen(
                         CircularProgressIndicator(color = cs.primary)
                     }
                     dirs.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Sin subcarpetas. Podés usar esta.", color = cs.onSurfaceVariant)
+                        Text(stringResource(R.string.no_subfolders), color = cs.onSurfaceVariant)
                     }
                     else -> LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
                         items(dirs, key = { it }) { child ->
@@ -1223,7 +1296,7 @@ private fun FolderPickerScreen(
         Column(Modifier.navigationBarsPadding().padding(16.dp)) {
             AnimatedVisibility(blocked) {
                 Text(
-                    "Elegí una carpeta interior, no la raíz del almacenamiento.",
+                    stringResource(R.string.pick_inner_folder),
                     color = cs.error,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(bottom = 8.dp)

@@ -12,7 +12,7 @@ function hasBridge() {
 function ksuExec(cmd) {
   return new Promise(function (resolve, reject) {
     if (!hasBridge()) {
-      reject(new Error("Puente KSU no disponible"));
+      reject(new Error(t("ksu_bridge")));
       return;
     }
     var cb = "__ksu_cb_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
@@ -91,9 +91,9 @@ function isUnsafeDest(path) {
 }
 
 function statusLabel(status) {
-  if (status === "MOUNTED") return "montado";
-  if (status === "UNMOUNTED") return "no montado";
-  if (status === "SOURCE_MISSING") return "origen ausente";
+  if (status === "MOUNTED") return t("mounted");
+  if (status === "UNMOUNTED") return t("unmounted");
+  if (status === "SOURCE_MISSING") return t("missing");
   return "sin comprobar";
 }
 
@@ -122,7 +122,7 @@ function addRow(src, dest, enabled, status) {
       '<div class="row-dest">→ ' + escapeHtml(dest || "sin destino") + "</div>" +
       '<span class="status-tag ' + (status || "") + '">' + statusLabel(status) + "</span>" +
     "</div>" +
-    '<button type="button" class="iconbtn" aria-label="Eliminar">✕</button>';
+    '<button type="button" class="iconbtn" aria-label="x">✕</button>';
   row.querySelector(".iconbtn").onclick = function () {
     askDelete(row, name, dest);
   };
@@ -150,7 +150,7 @@ function askDelete(row, name, dest) {
   var overlay = document.getElementById("confirm");
   var text = document.getElementById("confirmText");
   if (!overlay || !text) return;
-  text.textContent = "Se borra «" + name + "» de forma permanente y se desmonta si está montado.";
+  text.textContent = t("delete_body", name);
   overlay.classList.remove("hidden");
   function close() {
     overlay.classList.add("hidden");
@@ -160,7 +160,7 @@ function askDelete(row, name, dest) {
     close();
     if (row.parentNode) row.parentNode.removeChild(row);
     syncEmpty();
-    toast("Eliminando...");
+    toast(t("deleting"));
     var destBare = String(dest || "").replace(/\/+$/, "");
     persistConf()
       .then(function () {
@@ -168,7 +168,7 @@ function askDelete(row, name, dest) {
         return sh("nsenter -t 1 -m -- umount -l " + JSON.stringify(destBare) + " || true");
       })
       .then(refreshAll)
-      .then(function () { toast("Vínculo eliminado"); })
+      .then(function () { toast(t("deleted")); })
       .catch(function (err) { toast(err.message || String(err)); });
   };
   overlay.onclick = function (e) { if (e.target === overlay) close(); };
@@ -191,7 +191,7 @@ function loadStatus() {
 function refreshLog() {
   return sh(WEBCTL + " log").then(function (res) {
     var el = document.getElementById("log");
-    if (el) el.textContent = res.stdout || "(sin registros aún)";
+    if (el) el.textContent = res.stdout || t("no_logs");
   });
 }
 
@@ -311,12 +311,12 @@ function paintStorageLists(internals, externals, forceAnim) {
     function add(vol, secondary, label) {
       var cell = makeCell(secondary);
       box.appendChild(cell);
-      setRing(cell, vol.pct, vol.avail + " libres", vol.used, vol.total, label);
+      setRing(cell, vol.pct, t("libres", vol.avail), vol.used, vol.total, label);
     }
-    for (var a = 0; a < internals.length; a++) add(internals[a], false, "Interno");
+    for (var a = 0; a < internals.length; a++) add(internals[a], false, t("internal"));
     for (var b = 0; b < externals.length; b++) {
       var id = baseName(externals[b].path);
-      add(externals[b], true, id ? "SD " + id : "SD / OTG");
+      add(externals[b], true, id ? "SD " + id : t("sd_otg"));
     }
 }
 
@@ -328,28 +328,24 @@ function refreshAll() {
 
 document.getElementById("saveApplyBtn").onclick = function () {
   var b64 = btoa(unescape(encodeURIComponent(collectConfigText())));
-  toast("Guardando y montando...");
+  toast(t("saving"));
   sh("echo '" + b64 + "' | base64 -d > " + MODDIR + "/mounts.conf && sh " + WEBCTL + " apply")
     .then(function (res) {
-      toast(res.errno === 0 ? "Listo" : "Hubo un problema, mira el registro");
+      toast(res.errno === 0 ? t("done") : t("problem"));
       return refreshAll();
     })
     .catch(function (err) { toast(err.message || String(err)); });
 };
 
 document.getElementById("unmountBtn").onclick = function () {
-  toast("Desmontando...");
-  sh(WEBCTL + " unmount").then(refreshAll).then(function () { toast("Listo."); });
+  toast(t("unmounting"));
+  sh(WEBCTL + " unmount").then(refreshAll).then(function () { toast(t("done")); });
 };
 
-document.getElementById("bottomNav").onclick = function (e) {
-  var t = e.target;
-  while (t && t !== this && !(t.className && String(t.className).indexOf("navchip") >= 0)) t = t.parentNode;
-  if (!t || t === this) return;
-  var tab = t.getAttribute("data-tab");
+function switchTab(tab) {
   var chips = document.querySelectorAll(".navchip");
   for (var i = 0; i < chips.length; i++) {
-    chips[i].className = chips[i] === t ? "navchip on" : "navchip";
+    chips[i].className = chips[i].getAttribute("data-tab") === tab ? "navchip on" : "navchip";
   }
   document.getElementById("homePane").className = tab === "home" ? "pane-binds" : "pane-binds hidden";
   document.querySelector(".pane-storage").className = tab === "home" ? "pane-storage" : "pane-storage hidden";
@@ -359,6 +355,13 @@ document.getElementById("bottomNav").onclick = function (e) {
   document.getElementById("fab").className = tab === "home" ? "fab" : "fab hidden";
   if (tab === "log") refreshLog();
   if (tab === "about") loadAboutVer();
+}
+
+document.getElementById("bottomNav").onclick = function (e) {
+  var el = e.target;
+  while (el && el !== this && !(el.className && String(el.className).indexOf("navchip") >= 0)) el = el.parentNode;
+  if (!el || el === this) return;
+  switchTab(el.getAttribute("data-tab"));
 };
 
 var picker = {
@@ -377,15 +380,15 @@ var picker = {
 function openPicker(step) {
   picker.step = step;
   if (step === "src") {
-    picker.title.textContent = "Origen";
-    picker.hint.textContent = "Carpeta de la tarjeta o unidad que queres montar";
+    picker.title.textContent = t("source");
+    picker.hint.textContent = t("source_hint");
     picker.current = "/mnt/media_rw";
-    picker.ok.textContent = "Siguiente";
+    picker.ok.textContent = t("next");
   } else {
-    picker.title.textContent = "Destino";
-    picker.hint.textContent = "Carpeta del almacenamiento interno donde se va a ver";
+    picker.title.textContent = t("dest");
+    picker.hint.textContent = t("dest_hint");
     picker.current = "/storage/emulated/0";
-    picker.ok.textContent = "Vincular y montar";
+    picker.ok.textContent = t("link_mount");
   }
   picker.el.className = "picker";
   loadPicker();
@@ -398,7 +401,7 @@ function loadPicker() {
   var blocked = picker.step === "dst" && isUnsafeDest(picker.current);
   picker.warn.className = blocked ? "warn" : "warn hidden";
   picker.ok.disabled = blocked;
-  picker.list.textContent = "Cargando...";
+  picker.list.textContent = t("loading");
   ksuExec(WEBCTL + " list_children " + "'" + picker.current.replace(/'/g, "'\\''") + "'").then(function (res) {
     var dirs = String(res.stdout).split("\n");
     picker.list.innerHTML = "";
@@ -415,7 +418,7 @@ function loadPicker() {
         picker.list.appendChild(item);
       })(d);
     }
-    if (!any) picker.list.innerHTML = '<p class="empty">Sin subcarpetas. Podes usar esta.</p>';
+    if (!any) picker.list.innerHTML = '<p class="empty">' + t("no_sub") + "</p>";
   }).catch(function (err) {
     picker.list.textContent = err.message || String(err);
   });
@@ -446,14 +449,14 @@ document.getElementById("pickerOk").onclick = function () {
     return;
   }
   var dest = slash(picker.current);
-  if (isUnsafeDest(dest)) { toast("Elegi una subcarpeta, no la raiz"); return; }
+  if (isUnsafeDest(dest)) { toast(t("pick_sub")); return; }
   addRow(picker.source, dest, true, "");
   closePicker();
   var b64 = btoa(unescape(encodeURIComponent(collectConfigText())));
-  toast("Montando...");
+  toast(t("mounting"));
   sh("echo '" + b64 + "' | base64 -d > " + MODDIR + "/mounts.conf && sh " + WEBCTL + " apply")
     .then(refreshAll)
-    .then(function () { toast("Montado en " + dest); })
+    .then(function () { toast(t("mounted_in", dest)); })
     .catch(function (err) { toast(err.message || String(err)); });
 };
 
@@ -462,7 +465,7 @@ function loadAboutVer() {
   if (!el) return;
   sh("grep '^version=' " + MODDIR + "/module.prop").then(function (res) {
     var v = String(res.stdout || "").replace("version=", "").trim() || "v2.5.0";
-    el.textContent = "versión " + v;
+    el.textContent = t("version", v);
   }).catch(function () {});
 }
 
@@ -480,7 +483,7 @@ function isNewer(remote, local) {
 }
 
 function checkUpdate() {
-  toast("Buscando actualizaciones...");
+  toast(t("checking_up"));
   Promise.all([
     sh("grep '^version=' " + MODDIR + "/module.prop"),
     sh("cat " + MODDIR + "/github.repo")
@@ -488,18 +491,18 @@ function checkUpdate() {
     var local = String(rs[0].stdout || "").replace("version=", "").trim() || "v2.5.0";
     var repo = String(rs[1].stdout || "").split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l && l.charAt(0) !== "#"; })[0] || "jpmorales9038-ai/sdbind_project";
     if (!repo || repo.indexOf("/") < 0) {
-      toast("Falta el repo de GitHub");
+      toast(t("no_repo"));
       return;
     }
     return sh("curl -sL -H 'User-Agent: SDBind' https://api.github.com/repos/" + repo + "/releases/latest").then(function (res) {
       var json;
-      try { json = JSON.parse(res.stdout); } catch (e) { toast("GitHub no respondió"); return; }
+      try { json = JSON.parse(res.stdout); } catch (e) { toast(t("no_gh")); return; }
       if (!json || !json.tag_name) {
-        var msg = (json && json.message) || "Sin releases";
-        toast(/not found/i.test(msg) ? "Todavía no hay releases. Esperá a que Actions publique uno." : msg);
+        var msg = (json && json.message) || t("no_rel");
+        toast(/not found/i.test(msg) ? t("no_rel") : msg);
         return;
       }
-      if (!isNewer(json.tag_name, local)) { toast("Ya estás al día (" + local + ")"); return; }
+      if (!isNewer(json.tag_name, local)) { toast(t("up_to_date", local)); return; }
       var zip = "";
       var assets = json.assets || [];
       for (var i = 0; i < assets.length; i++) {
@@ -507,8 +510,8 @@ function checkUpdate() {
           zip = assets[i].browser_download_url; break;
         }
       }
-      if (!zip) { toast("La release no trae un .zip"); return; }
-      toast("Descargando " + json.tag_name + "...");
+      if (!zip) { toast(t("no_zip")); return; }
+      toast(t("downloading", json.tag_name));
       var tmp = "/data/local/tmp/sdbind_update.zip";
       var pub = "/storage/emulated/0/Download/sdbind_update.zip";
       return sh(
@@ -519,7 +522,7 @@ function checkUpdate() {
         " || am start -n me.weishu.kernelsu/.ui.MainActivity --user 0" +
         "; true"
       ).then(function () {
-        toast(json.tag_name + " en Descargas. Abrilo con KernelSU para flashear.");
+        toast(t("in_downloads", json.tag_name));
       });
     });
   }).catch(function (err) { toast(err.message || String(err)); });
@@ -529,13 +532,14 @@ var updateBtn = document.getElementById("updateBtn");
 if (updateBtn) updateBtn.onclick = checkUpdate;
 
 function boot(found) {
+  applyI18n();
   if (found) {
-    setBadge("conectado", "ok");
+    setBadge(t("connected"), "ok");
     loadThemeAndFont();
     refreshAll();
     startVolumeWatch();
   } else {
-    setBadge("sin acceso", "bad");
+    setBadge(t("no_access"), "bad");
     syncEmpty();
   }
 }
@@ -674,7 +678,7 @@ function startVolumeWatch() {
   function start() {
     clearTimeout(timer);
     timer = setTimeout(function () {
-      toast("Actualizando almacenamiento...");
+      toast(t("refresh_st"));
       loadStorage(true).catch(function (err) { toast(err.message || String(err)); });
     }, 500);
   }
@@ -687,9 +691,47 @@ function startVolumeWatch() {
   card.addEventListener("mouseleave", cancel);
   card.addEventListener("contextmenu", function (e) {
     e.preventDefault();
-    toast("Actualizando almacenamiento...");
+    toast(t("refresh_st"));
     loadStorage(true);
   });
+})();
+
+(function bindLang() {
+  var row = document.getElementById("langRow");
+  if (!row) return;
+  row.onclick = function (e) {
+    var b = e.target;
+    if (!b || !b.getAttribute) return;
+    var tag = b.getAttribute("data-lang");
+    if (!tag) return;
+    setLang(tag);
+    try { loadStorage(false); } catch (err) {}
+    try { loadAboutVer(); } catch (err2) {}
+  };
+})();
+
+(function bindSwipe() {
+  var x0 = 0, y0 = 0;
+  var tabs = ["home", "log", "about"];
+  var root = document.getElementById("app");
+  if (!root) return;
+  root.addEventListener("touchstart", function (e) {
+    if (!e.changedTouches || !e.changedTouches[0]) return;
+    if (document.getElementById("picker") && document.getElementById("picker").className.indexOf("hidden") < 0) return;
+    x0 = e.changedTouches[0].clientX;
+    y0 = e.changedTouches[0].clientY;
+  }, { passive: true });
+  root.addEventListener("touchend", function (e) {
+    if (!e.changedTouches || !e.changedTouches[0]) return;
+    var dx = e.changedTouches[0].clientX - x0;
+    var dy = e.changedTouches[0].clientY - y0;
+    if (Math.abs(dx) < 72 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    var on = document.querySelector(".navchip.on");
+    var cur = on ? on.getAttribute("data-tab") : "home";
+    var i = tabs.indexOf(cur);
+    if (dx < 0 && i < tabs.length - 1) switchTab(tabs[i + 1]);
+    if (dx > 0 && i > 0) switchTab(tabs[i - 1]);
+  }, { passive: true });
 })();
 
 (function waitBridge() {

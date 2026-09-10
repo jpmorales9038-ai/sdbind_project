@@ -1,0 +1,185 @@
+function guessLang() {
+  var n = String(navigator.language || "es").toLowerCase();
+  if (n.indexOf("en") === 0) return "en";
+  if (n.indexOf("es-es") === 0) return "es-ES";
+  return "es";
+}
+var LANG = localStorage.getItem("sdbind_lang") || guessLang();
+var I18N = {
+  es: {
+    home: "Inicio", log: "Registro", about: "Acerca de",
+    storage: "Almacenamiento", binds: "Vínculos",
+    save_mount: "Guardar y montar", unmount_all: "Desmontar todo",
+    empty_binds: "Nada vinculado todavía. Toca + y elige origen y destino.",
+    add: "Añadir vínculo",
+    checking: "comprobando…", connected: "conectado", no_access: "sin acceso",
+    source: "Origen", dest: "Destino",
+    source_hint: "Carpeta de la tarjeta o unidad que quieres montar",
+    dest_hint: "Carpeta del almacenamiento interno donde se va a ver",
+    next: "Siguiente", link_mount: "Vincular y montar",
+    internal: "Interno", sd_otg: "SD / OTG",
+    up: "↑ Subir un nivel",
+    no_sub: "Sin subcarpetas. Puedes usar esta.",
+    pick_inner: "Elige una carpeta interior, no la raíz del almacenamiento.",
+    pick_sub: "Elige una subcarpeta, no la raíz",
+    delete_bind: "Eliminar vínculo",
+    delete_body: "Se elimina «%s» de forma permanente y se desmonta si está montado.",
+    cancel: "Cancelar", delete: "Eliminar",
+    deleting: "Eliminando...", deleted: "Vínculo eliminado",
+    mounted: "montado", unmounted: "no montado", missing: "origen ausente",
+    no_logs: "(sin registros aún)",
+    saving: "Guardando y montando...", done: "Listo",
+    problem: "Hubo un problema, mira el registro",
+    unmounting: "Desmontando...",
+    mounting: "Montando...", mounted_in: "Montado en %s",
+    about_title: "Acerca de", tools: "Herramientas",
+    updates: "Actualizaciones",
+    updates_desc: "Si hay una versión nueva, descarga el zip y te pregunta con qué app flashearlo (KernelSU).",
+    search: "Buscar",
+    card_binds: "Vínculos", card_binds_d: "Monta carpetas de SD u OTG dentro del interno",
+    card_mod: "Módulo", card_mod_d: "KernelSU con WebUI de respaldo",
+    card_exp: "Explorador", card_exp_d: "Elige origen y destino tocando +",
+    card_my: "Material You", card_my_d: "Colores y formas dinámicos del sistema",
+    language: "Idioma",
+    lang_sys: "Sistema", lang_es: "Español", lang_es_es: "Español (España)", lang_en: "English",
+    version: "versión %s",
+    checking_up: "Buscando actualizaciones...",
+    no_repo: "Falta el repo de GitHub",
+    no_gh: "GitHub no respondió",
+    no_rel: "Todavía no hay releases. Espera a que Actions publique uno.",
+    up_to_date: "Ya estás al día (%s)",
+    no_zip: "La release no trae un .zip",
+    downloading: "Descargando %s...",
+    in_downloads: "%s en Descargas. Ábrelo con KernelSU para flashear.",
+    refresh_st: "Actualizando almacenamiento...",
+    ksu_bridge: "Puente KSU no disponible",
+    libres: "%s libres",
+    loading: "Cargando..."
+  },
+  "es-ES": {
+    home: "Inicio", log: "Registro", about: "Acerca de",
+    storage: "Almacenamiento", binds: "Vínculos",
+    save_mount: "Guardar y montar", unmount_all: "Desmontar todo",
+    empty_binds: "Nada vinculado todavía. Pulsa + y elige origen y destino.",
+    add: "Añadir vínculo",
+    checking: "comprobando…", connected: "conectado", no_access: "sin acceso",
+    source: "Origen", dest: "Destino",
+    source_hint: "Carpeta de la tarjeta o unidad que quieres montar",
+    dest_hint: "Carpeta del almacenamiento interno donde se va a ver",
+    next: "Siguiente", link_mount: "Vincular y montar",
+    internal: "Interno", sd_otg: "SD / OTG",
+    up: "↑ Subir un nivel",
+    no_sub: "Sin subcarpetas. Puedes usar esta.",
+    pick_inner: "Elige una carpeta interior, no la raíz del almacenamiento.",
+    pick_sub: "Elige una subcarpeta, no la raíz",
+    delete_bind: "Eliminar vínculo",
+    delete_body: "Se elimina «%s» de forma permanente y se desmonta si está montado.",
+    cancel: "Cancelar", delete: "Eliminar",
+    deleting: "Eliminando...", deleted: "Vínculo eliminado",
+    mounted: "montado", unmounted: "no montado", missing: "origen ausente",
+    no_logs: "(sin registros aún)",
+    saving: "Guardando y montando...", done: "Listo",
+    problem: "Ha habido un problema, consulta el registro",
+    unmounting: "Desmontando...",
+    mounting: "Montando...", mounted_in: "Montado en %s",
+    about_title: "Acerca de", tools: "Herramientas",
+    updates: "Actualizaciones",
+    updates_desc: "Si hay una versión nueva, descarga el zip y te pregunta con qué aplicación flashearlo (KernelSU).",
+    search: "Buscar",
+    card_binds: "Vínculos", card_binds_d: "Monta carpetas de SD u OTG dentro del interno",
+    card_mod: "Módulo", card_mod_d: "KernelSU con WebUI de respaldo",
+    card_exp: "Explorador", card_exp_d: "Elige origen y destino pulsando +",
+    card_my: "Material You", card_my_d: "Colores y formas dinámicos del sistema",
+    language: "Idioma",
+    lang_sys: "Sistema", lang_es: "Español", lang_es_es: "Español (España)", lang_en: "English",
+    version: "versión %s",
+    checking_up: "Buscando actualizaciones...",
+    no_repo: "Falta el repo de GitHub",
+    no_gh: "GitHub no ha respondido",
+    no_rel: "Todavía no hay versiones. Espera a que Actions publique una.",
+    up_to_date: "Ya estás al día (%s)",
+    no_zip: "La versión no incluye un .zip",
+    downloading: "Descargando %s...",
+    in_downloads: "%s en Descargas. Ábrelo con KernelSU para flashearlo.",
+    refresh_st: "Actualizando almacenamiento...",
+    ksu_bridge: "Puente KSU no disponible",
+    libres: "%s libres",
+    loading: "Cargando..."
+  },
+  en: {
+    home: "Home", log: "Log", about: "About",
+    storage: "Storage", binds: "Binds",
+    save_mount: "Save and mount", unmount_all: "Unmount all",
+    empty_binds: "Nothing bound yet. Tap + and pick source and destination.",
+    add: "Add bind",
+    checking: "checking…", connected: "connected", no_access: "no access",
+    source: "Source", dest: "Destination",
+    source_hint: "Folder on the card or drive you want to mount",
+    dest_hint: "Internal storage folder where it will appear",
+    next: "Next", link_mount: "Bind and mount",
+    internal: "Internal", sd_otg: "SD / OTG",
+    up: "↑ Up one level",
+    no_sub: "No subfolders. You can use this one.",
+    pick_inner: "Pick an inner folder, not storage root.",
+    pick_sub: "Pick a subfolder, not the root",
+    delete_bind: "Delete bind",
+    delete_body: "“%s” will be removed permanently and unmounted if needed.",
+    cancel: "Cancel", delete: "Delete",
+    deleting: "Deleting...", deleted: "Bind deleted",
+    mounted: "mounted", unmounted: "unmounted", missing: "source missing",
+    no_logs: "(no logs yet)",
+    saving: "Saving and mounting...", done: "Done",
+    problem: "Something went wrong, check the log",
+    unmounting: "Unmounting...",
+    mounting: "Mounting...", mounted_in: "Mounted at %s",
+    about_title: "About", tools: "Tools",
+    updates: "Updates",
+    updates_desc: "If a newer version is available, it downloads the zip and asks which app should flash it (KernelSU).",
+    search: "Search",
+    card_binds: "Binds", card_binds_d: "Mount SD or OTG folders inside internal storage",
+    card_mod: "Module", card_mod_d: "KernelSU with a fallback WebUI",
+    card_exp: "Explorer", card_exp_d: "Pick source and destination with +",
+    card_my: "Material You", card_my_d: "Dynamic system colors and shapes",
+    language: "Language",
+    lang_sys: "System", lang_es: "Español", lang_es_es: "Español (España)", lang_en: "English",
+    version: "version %s",
+    checking_up: "Checking for updates...",
+    no_repo: "GitHub repo is missing",
+    no_gh: "GitHub didn’t respond",
+    no_rel: "No releases yet. Wait for Actions to publish one.",
+    up_to_date: "You’re up to date (%s)",
+    no_zip: "The release has no .zip",
+    downloading: "Downloading %s...",
+    in_downloads: "%s is in Downloads. Open it with KernelSU to flash.",
+    refresh_st: "Refreshing storage...",
+    ksu_bridge: "KSU bridge unavailable",
+    libres: "%s free",
+    loading: "Loading..."
+  }
+};
+function t(k, a) {
+  var pack = I18N[LANG] || I18N.es;
+  var s = pack[k] || (I18N.es && I18N.es[k]) || k;
+  if (a != null) s = String(s).replace("%s", a);
+  return s;
+}
+function setLang(tag) {
+  LANG = tag || guessLang();
+  if (tag) localStorage.setItem("sdbind_lang", tag);
+  else localStorage.removeItem("sdbind_lang");
+  applyI18n();
+}
+function applyI18n() {
+  var nodes = document.querySelectorAll("[data-i18n]");
+  for (var i = 0; i < nodes.length; i++) {
+    nodes[i].textContent = t(nodes[i].getAttribute("data-i18n"));
+  }
+  var titles = document.querySelectorAll("[data-i18n-title]");
+  for (var k = 0; k < titles.length; k++) {
+    titles[k].setAttribute("title", t(titles[k].getAttribute("data-i18n-title")));
+  }
+  var chips = document.querySelectorAll("#langRow button");
+  for (var j = 0; j < chips.length; j++) {
+    chips[j].className = chips[j].getAttribute("data-lang") === LANG ? "on" : "";
+  }
+}

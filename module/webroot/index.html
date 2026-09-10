@@ -10,34 +10,34 @@
   <div id="app">
     <header class="top">
       <h1>SD Bind</h1>
-      <span id="bridgeStatus" class="badge">comprobando…</span>
+      <span id="bridgeStatus" class="badge" data-i18n="checking">comprobando…</span>
     </header>
 
     <div class="layout">
       <section class="pane-storage">
         <div class="card" id="storageCard">
-          <p class="kicker">Almacenamiento</p>
+          <p class="kicker" data-i18n="storage">Almacenamiento</p>
           <div class="rings" id="rings"></div>
         </div>
         <div class="actions">
-          <button id="saveApplyBtn" class="btn primary">Guardar y montar</button>
-          <button id="unmountBtn" class="btn danger">Desmontar todo</button>
+          <button id="saveApplyBtn" class="btn primary" data-i18n="save_mount">Guardar y montar</button>
+          <button id="unmountBtn" class="btn danger" data-i18n="unmount_all">Desmontar todo</button>
         </div>
       </section>
 
       <section class="pane-binds" id="homePane">
-        <h2>Vínculos</h2>
+        <h2 data-i18n="binds">Vínculos</h2>
         <div id="rows" class="rows"></div>
-        <p id="emptyHint" class="empty">Nada vinculado todavía. Tocá + y elegí origen y destino.</p>
+        <p id="emptyHint" class="empty" data-i18n="empty_binds">Nada vinculado todavía. Toca + y elige origen y destino.</p>
       </section>
 
       <section class="pane-log hidden" id="logPane">
-        <h2>Registro</h2>
+        <h2 data-i18n="log">Registro</h2>
         <pre id="log" class="log"></pre>
       </section>
 
       <section class="pane-about hidden" id="aboutPane">
-        <h2>Acerca de</h2>
+        <h2 data-i18n="about_title">Acerca de</h2>
         <div class="about-hero">
           <div class="app-mark" aria-hidden="true">
             <svg viewBox="0 0 100 100">
@@ -50,30 +50,36 @@
           <div class="about-name">SD Bind</div>
           <div class="about-ver" id="aboutVer">versión</div>
         </div>
-        <h2>Herramientas</h2>
+        <h2 data-i18n="language">Idioma</h2>
+        <div class="lang-row" id="langRow">
+          <button type="button" data-lang="es">Español</button>
+          <button type="button" data-lang="es-ES">Español (España)</button>
+          <button type="button" data-lang="en">English</button>
+        </div>
+        <h2 data-i18n="tools">Herramientas</h2>
         <div class="tool-wide">
           <div class="tool-ico">↑</div>
           <div class="tool-copy">
-            <div class="tool-title">Actualizaciones</div>
-            <div class="tool-desc">Si hay una versión nueva, descarga el zip y te pregunta con qué app flashearlo (KernelSU).</div>
+            <div class="tool-title" data-i18n="updates">Actualizaciones</div>
+            <div class="tool-desc" data-i18n="updates_desc">Si hay una versión nueva, descarga el zip y te pregunta con qué app flashearlo (KernelSU).</div>
           </div>
-          <button type="button" id="updateBtn" class="tool-btn">Buscar</button>
+          <button type="button" id="updateBtn" class="tool-btn" data-i18n="search">Buscar</button>
         </div>
         <div class="tool-grid">
-          <div class="tool-card"><div class="tool-ico">📁</div><div class="tool-title">Vínculos</div><div class="tool-desc">Montá carpetas de SD u OTG dentro del interno</div></div>
-          <div class="tool-card"><div class="tool-ico">⚙</div><div class="tool-title">Módulo</div><div class="tool-desc">KernelSU con WebUI de respaldo</div></div>
-          <div class="tool-card"><div class="tool-ico">+</div><div class="tool-title">Explorador</div><div class="tool-desc">Elegí origen y destino tocando +</div></div>
-          <div class="tool-card"><div class="tool-ico">◉</div><div class="tool-title">Material You</div><div class="tool-desc">Colores y formas dinámicos del sistema</div></div>
+          <div class="tool-card"><div class="tool-ico">📁</div><div class="tool-title" data-i18n="card_binds">Vínculos</div><div class="tool-desc" data-i18n="card_binds_d">Monta carpetas de SD u OTG dentro del interno</div></div>
+          <div class="tool-card"><div class="tool-ico">⚙</div><div class="tool-title" data-i18n="card_mod">Módulo</div><div class="tool-desc" data-i18n="card_mod_d">KernelSU con WebUI de respaldo</div></div>
+          <div class="tool-card"><div class="tool-ico">+</div><div class="tool-title" data-i18n="card_exp">Explorador</div><div class="tool-desc" data-i18n="card_exp_d">Elige origen y destino tocando +</div></div>
+          <div class="tool-card"><div class="tool-ico">◉</div><div class="tool-title" data-i18n="card_my">Material You</div><div class="tool-desc" data-i18n="card_my_d">Colores y formas dinámicos del sistema</div></div>
         </div>
       </section>
     </div>
 
-    <button id="fab" class="fab" title="Añadir vínculo">+</button>
+    <button id="fab" class="fab" title="+" data-i18n-title="add">+</button>
 
     <nav class="bottom" id="bottomNav">
-      <button class="navchip on" data-tab="home">Inicio</button>
-      <button class="navchip" data-tab="log">Registro</button>
-      <button class="navchip" data-tab="about">Acerca de</button>
+      <button class="navchip on" data-tab="home" data-i18n="home">Inicio</button>
+      <button class="navchip" data-tab="log" data-i18n="log">Registro</button>
+      <button class="navchip" data-tab="about" data-i18n="about">Acerca de</button>
     </nav>
   </div>
 
@@ -86,28 +92,29 @@
       </div>
     </div>
     <div class="chips">
-      <button data-jump="/storage/emulated/0">Interno</button>
-      <button data-jump="/mnt/media_rw">SD / OTG</button>
+      <button data-jump="/storage/emulated/0" data-i18n="internal">Interno</button>
+      <button data-jump="/mnt/media_rw" data-i18n="sd_otg">SD / OTG</button>
     </div>
     <div id="pickerPath" class="picker-path"></div>
-    <button id="pickerUp" class="up">↑ Subir un nivel</button>
+    <button id="pickerUp" class="up" data-i18n="up">↑ Subir un nivel</button>
     <div id="pickerList" class="picker-list"></div>
-    <p id="pickerWarn" class="warn hidden">Elegí una carpeta interior, no la raíz del almacenamiento.</p>
+    <p id="pickerWarn" class="warn hidden" data-i18n="pick_inner">Elige una carpeta interior, no la raíz del almacenamiento.</p>
     <button id="pickerOk" class="btn primary">Siguiente</button>
   </div>
 
   <div id="confirm" class="confirm hidden">
     <div class="confirm-card">
-      <h3>Eliminar vínculo</h3>
+      <h3 data-i18n="delete_bind">Eliminar vínculo</h3>
       <p id="confirmText"></p>
       <div class="confirm-actions">
-        <button type="button" id="confirmNo">Cancelar</button>
-        <button type="button" id="confirmYes" class="danger">Eliminar</button>
+        <button type="button" id="confirmNo" data-i18n="cancel">Cancelar</button>
+        <button type="button" id="confirmYes" class="danger" data-i18n="delete">Eliminar</button>
       </div>
     </div>
   </div>
 
   <div id="toast" class="toast"></div>
+  <script src="i18n.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
