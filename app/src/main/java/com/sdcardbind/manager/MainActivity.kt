@@ -70,6 +70,7 @@ fun AppTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = colors, content = content)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
     val scope = rememberCoroutineScope()
@@ -96,6 +97,13 @@ fun MainScreen() {
     LaunchedEffect(Unit) {
         rootOk = RootOps.isRootAvailable()
         if (rootOk == true) refreshAll()
+    }
+
+    LaunchedEffect(snackbarMsg) {
+        if (snackbarMsg != null) {
+            kotlinx.coroutines.delay(2800)
+            snackbarMsg = null
+        }
     }
 
     Scaffold(
@@ -272,7 +280,7 @@ fun MainScreen() {
                     fontSize = 11.sp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 200.dp)
+                        .heightIn(min = 80.dp, max = 200.dp)
                         .verticalScroll(rememberScrollState())
                         .background(Color.Black, RoundedCornerShape(8.dp))
                         .padding(10.dp)
@@ -290,8 +298,10 @@ fun MainScreen() {
             onDismiss = { browserTarget = null },
             onSelect = { chosen ->
                 entries = entries.toMutableList().also {
-                    val cur = it[index]
-                    it[index] = if (isSource) cur.copy(source = chosen) else cur.copy(dest = chosen)
+                    if (index in it.indices) {
+                        val cur = it[index]
+                        it[index] = if (isSource) cur.copy(source = chosen) else cur.copy(dest = chosen)
+                    }
                 }
                 browserTarget = null
             }
@@ -447,7 +457,7 @@ fun FolderBrowserDialog(
         Column(
             Modifier
                 .fillMaxWidth()
-                .heightIn(max = 560.dp)
+                .height(560.dp)
                 .background(CardColor, RoundedCornerShape(12.dp))
                 .padding(14.dp)
         ) {
@@ -476,7 +486,7 @@ fun FolderBrowserDialog(
                 }
             }
 
-            Box(Modifier.weight(1f, fill = false)) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (loading) {
                     Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = AccentColor)
@@ -484,7 +494,7 @@ fun FolderBrowserDialog(
                 } else if (children.isEmpty()) {
                     Text("Sin subcarpetas aquí.", color = MutedColor, fontSize = 12.sp, modifier = Modifier.padding(12.dp))
                 } else {
-                    LazyColumn {
+                    LazyColumn(Modifier.fillMaxSize()) {
                         items(children) { child ->
                             Row(
                                 Modifier
