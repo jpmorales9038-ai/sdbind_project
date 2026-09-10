@@ -159,11 +159,10 @@ function setRing(cell, pct, free, used, total, label) {
   if (!cell) return;
   var arc = cell.querySelector(".arc");
   var text = cell.querySelector("text");
-  var C = 251.2;
   var p = Math.max(0, Math.min(100, pct || 0));
   if (arc) {
-    arc.setAttribute("stroke-dasharray", String(C));
-    arc.setAttribute("stroke-dashoffset", String(C * (1 - p / 100)));
+    arc.style.strokeDasharray = p + " 100";
+    arc.style.strokeDashoffset = "0";
   }
   if (text) text.textContent = p ? p + "%" : "-";
   var lab = cell.querySelector(".cell-label");

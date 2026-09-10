@@ -57,16 +57,16 @@ body {
 
 .rings { display: flex; gap: 12px; }
 .cell { flex: 1; text-align: center; min-width: 0; }
-.ring { width: 88px; height: 88px; margin: 0 auto; }
+.ring { width: 96px; height: 96px; margin: 0 auto; display: block; }
 .ring circle { fill: none; stroke-width: 10; stroke-linecap: round; }
-.ring .track { stroke: var(--surface-2); }
+.ring .track { stroke: var(--surface-2); stroke-dasharray: 100; stroke-dashoffset: 0; }
 .ring .arc {
   stroke: var(--primary);
-  stroke-dasharray: 251.2;
-  stroke-dashoffset: 251.2;
+  stroke-dasharray: 0 100;
+  stroke-dashoffset: 0;
   transform: rotate(-90deg);
-  transform-origin: 50% 50%;
-  transition: stroke-dashoffset .7s ease;
+  transform-origin: 50px 50px;
+  transition: stroke-dasharray .7s ease;
 }
 .ring.secondary .arc { stroke: #c48aa8; }
 .ring text { font-size: 14px; font-weight: 700; fill: var(--text); }
