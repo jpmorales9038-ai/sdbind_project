@@ -243,33 +243,67 @@ function setRing(cell, pct, free, used, total, label) {
   if (us) us.textContent = used ? used + " / " + total : "";
 }
 
-function loadStorage() {
-  return sh(WEBCTL + " storage").then(function (res) {
-    var out = String(res.stdout || "");
-    if (out.indexOf("INTERNAL|") < 0 && out.indexOf("EXTERNAL|") < 0) {
-      return sh("cat " + MODDIR + "/storage.cache 2>/dev/null").then(function (c) {
-        res.stdout = c.stdout || "";
-        return paintStorage(res);
-      });
-    }
-    return paintStorage(res);
+function parseKindLines(text, internals, externals, seen) {
+  String(text || "").split("\n").forEach(function (line) {
+    var p = line.trim().split("|");
+    if (p.length < 6) return;
+    if (p[0] !== "INTERNAL" && p[0] !== "EXTERNAL") return;
+    var key = p[0] + ":" + baseName(p[1]);
+    if (seen[key]) return;
+    seen[key] = 1;
+    var vol = { kind: p[0], path: p[1], total: p[2], used: p[3], avail: p[4], pct: parseInt(p[5], 10) || 0 };
+    if (vol.kind === "INTERNAL") internals.push(vol);
+    else externals.push(vol);
   });
 }
 
-function paintStorage(res) {
+function parseDfText(text, internals, externals, seen) {
+  String(text || "").split("\n").forEach(function (line) {
+    var cols = line.trim().split(/\s+/);
+    if (cols.length < 6) return;
+    var mp = cols[cols.length - 1];
+    var kind = null;
+    if (mp === "/data" || mp === "/data/media" || mp.indexOf("/storage/emulated") === 0) kind = "INTERNAL";
+    else if (/^\/mnt\/media_rw\/[^/]+$/.test(mp) || /^\/mnt\/expand\/[^/]+$/.test(mp)) kind = "EXTERNAL";
+    else if (/^\/mnt\/runtime\/default\/[^/]+$/.test(mp) && mp.indexOf("emulated") < 0) kind = "EXTERNAL";
+    else if (mp.indexOf("/storage/") === 0 && mp.indexOf("emulated") < 0 && !/\/self$/.test(mp)) kind = "EXTERNAL";
+    if (!kind) return;
+    var key = kind + ":" + baseName(mp);
+    if (seen[key]) return;
+    seen[key] = 1;
+    var vol = {
+      kind: kind,
+      path: mp,
+      total: cols[cols.length - 5],
+      used: cols[cols.length - 4],
+      avail: cols[cols.length - 3],
+      pct: parseInt(String(cols[cols.length - 2]).replace("%", ""), 10) || 0
+    };
+    if (kind === "INTERNAL") internals.push(vol);
+    else externals.push(vol);
+  });
+}
+
+function loadStorage() {
+  return Promise.all([
+    sh(WEBCTL + " storage").catch(function () { return { stdout: "" }; }),
+    sh("cat " + MODDIR + "/storage.cache 2>/dev/null").catch(function () { return { stdout: "" }; }),
+    sh("nsenter -t 1 -m -- df -Ph 2>/dev/null || nsenter --mount=/proc/1/ns/mnt -- df -Ph 2>/dev/null || df -Ph 2>/dev/null").catch(function () { return { stdout: "" }; })
+  ]).then(function (rs) {
+    var internals = [];
+    var externals = [];
+    var seen = {};
+    parseKindLines(rs[0] && rs[0].stdout, internals, externals, seen);
+    parseKindLines(rs[1] && rs[1].stdout, internals, externals, seen);
+    parseDfText(rs[2] && rs[2].stdout, internals, externals, seen);
+    paintStorageLists(internals, externals);
+  });
+}
+
+function paintStorageLists(internals, externals) {
     var box = document.getElementById("rings");
     if (!box) return;
     box.innerHTML = "";
-    var internals = [];
-    var externals = [];
-    var lines = String(res.stdout).split("\n");
-    for (var i = 0; i < lines.length; i++) {
-      var p = lines[i].trim().split("|");
-      if (p.length < 6) continue;
-      var vol = { kind: p[0], path: p[1], total: p[2], used: p[3], avail: p[4], pct: parseInt(p[5], 10) || 0 };
-      if (vol.kind === "INTERNAL") internals.push(vol);
-      else if (vol.kind === "EXTERNAL") externals.push(vol);
-    }
     function add(vol, secondary, label) {
       var cell = makeCell(secondary);
       box.appendChild(cell);
@@ -280,7 +314,7 @@ function paintStorage(res) {
       var id = baseName(externals[b].path);
       add(externals[b], true, id ? "SD " + id : "SD / OTG");
     }
-    lastVolKey = volKeyFromStdout(res.stdout);
+    lastVolKey = internals.concat(externals).map(function (v) { return v.kind + ":" + baseName(v.path); }).join("|");
 }
 
 function refreshAll() {
