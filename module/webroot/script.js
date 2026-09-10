@@ -462,7 +462,7 @@ function loadAboutVer() {
   if (!el) return;
   sh("grep '^version=' " + MODDIR + "/module.prop").then(function (res) {
     var v = String(res.stdout || "").replace("version=", "").trim() || "v2.5.0";
-    el.textContent = "SD Bind  ·  " + v;
+    el.textContent = "versión " + v;
   }).catch(function () {});
 }
 

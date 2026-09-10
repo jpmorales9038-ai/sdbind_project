@@ -39,26 +39,31 @@
       <section class="pane-about hidden" id="aboutPane">
         <h2>Acerca de</h2>
         <div class="about-hero">
-          <img src="avatar.jpg" alt="ENZO BRADO" class="about-avatar" />
-          <div>
-            <div class="about-name">ENZO BRADO</div>
-            <div class="about-ver" id="aboutVer">SD Bind</div>
+          <div class="app-mark" aria-hidden="true">
+            <svg viewBox="0 0 100 100">
+              <circle class="mark-track" cx="50" cy="50" r="40" />
+              <circle class="mark-arc" cx="50" cy="50" r="40" pathLength="100" />
+              <circle class="mark-arc2" cx="50" cy="50" r="28" pathLength="100" />
+            </svg>
+            <div class="mark-core">∞</div>
           </div>
+          <div class="about-name">SD Bind</div>
+          <div class="about-ver" id="aboutVer">versión</div>
         </div>
         <h2>Herramientas</h2>
         <div class="tool-wide">
           <div class="tool-ico">↑</div>
           <div class="tool-copy">
             <div class="tool-title">Actualizaciones</div>
-            <div class="tool-desc">Desde GitHub Releases, sola</div>
+            <div class="tool-desc">Busca en GitHub si hay una versión nueva. Si la hay, descarga el zip, instala el módulo y actualiza la app.</div>
           </div>
           <button type="button" id="updateBtn" class="tool-btn">Buscar</button>
         </div>
         <div class="tool-grid">
-          <div class="tool-card"><div class="tool-ico">📁</div><div class="tool-title">Vínculos</div><div class="tool-desc">SD u OTG al almacenamiento interno</div></div>
-          <div class="tool-card"><div class="tool-ico">⚙</div><div class="tool-title">Módulo</div><div class="tool-desc">KernelSU + WebUI de respaldo</div></div>
-          <div class="tool-card"><div class="tool-ico">USB</div><div class="tool-title">OTG</div><div class="tool-desc">Popup al conectar USB</div></div>
-          <div class="tool-card"><div class="tool-ico">◉</div><div class="tool-title">Material You</div><div class="tool-desc">Colores dinámicos del sistema</div></div>
+          <div class="tool-card"><div class="tool-ico">📁</div><div class="tool-title">Vínculos</div><div class="tool-desc">Montá carpetas de SD u OTG dentro del interno</div></div>
+          <div class="tool-card"><div class="tool-ico">⚙</div><div class="tool-title">Módulo</div><div class="tool-desc">KernelSU con WebUI de respaldo</div></div>
+          <div class="tool-card"><div class="tool-ico">+</div><div class="tool-title">Explorador</div><div class="tool-desc">Elegí origen y destino tocando +</div></div>
+          <div class="tool-card"><div class="tool-ico">◉</div><div class="tool-title">Material You</div><div class="tool-desc">Colores y formas dinámicos del sistema</div></div>
         </div>
       </section>
     </div>

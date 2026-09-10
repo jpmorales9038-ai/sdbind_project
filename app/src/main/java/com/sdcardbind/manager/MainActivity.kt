@@ -19,8 +19,13 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -55,6 +60,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -871,15 +877,91 @@ private fun StatusChip(status: String) {
 }
 
 @Composable
+private fun AppMark(modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    val inf = rememberInfiniteTransition(label = "appMark")
+    val rot by inf.animateFloat(
+        0f, 360f,
+        infiniteRepeatable(tween(8000, easing = LinearEasing), RepeatMode.Restart),
+        label = "rot"
+    )
+    val rot2 by inf.animateFloat(
+        360f, 0f,
+        infiniteRepeatable(tween(11000, easing = LinearEasing), RepeatMode.Restart),
+        label = "rot2"
+    )
+    val sweep by inf.animateFloat(
+        0.42f, 0.86f,
+        infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "sweep"
+    )
+    val pulse by inf.animateFloat(
+        0.94f, 1.06f,
+        infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "pulse"
+    )
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = size.minDimension * 0.085f
+            val pad = stroke * 0.9f
+            drawArc(
+                color = cs.primary.copy(alpha = 0.18f),
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = Offset(pad, pad),
+                size = Size(size.width - pad * 2, size.height - pad * 2),
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = cs.primary,
+                startAngle = -90f + rot,
+                sweepAngle = 360f * sweep,
+                useCenter = false,
+                topLeft = Offset(pad, pad),
+                size = Size(size.width - pad * 2, size.height - pad * 2),
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+            val inner = pad * 2.35f
+            drawArc(
+                color = cs.tertiary,
+                startAngle = 90f + rot2,
+                sweepAngle = 220f * sweep,
+                useCenter = false,
+                topLeft = Offset(inner, inner),
+                size = Size(size.width - inner * 2, size.height - inner * 2),
+                style = Stroke(stroke * 0.72f, cap = StrokeCap.Round)
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxSize(0.42f)
+                .graphicsLayer { scaleX = pulse; scaleY = pulse }
+                .clip(RoundedCornerShape(32))
+                .background(cs.primary),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Filled.Link,
+                contentDescription = null,
+                tint = cs.onPrimary,
+                modifier = Modifier.fillMaxSize(0.55f)
+            )
+        }
+    }
+}
+
+@Composable
 private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
+    val cfg = LocalConfiguration.current
     val ver = remember {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull() ?: "2.5.0"
+        }.getOrNull() ?: "2.5.1"
     }
-    val squircle = RoundedCornerShape(28.dp)
+    val iconDp = (minOf(cfg.screenWidthDp, cfg.screenHeightDp) * 0.32f).coerceIn(104f, 176f).dp
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
     ) {
@@ -891,20 +973,13 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(36.dp))
                 .background(cs.surfaceContainer)
-                .padding(24.dp),
+                .padding(vertical = 28.dp, horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Image(
-                painter = painterResource(R.drawable.avatar),
-                contentDescription = "Avatar",
-                modifier = Modifier
-                    .size(128.dp)
-                    .clip(squircle),
-                contentScale = ContentScale.Crop
-            )
+            AppMark(Modifier.size(iconDp))
             Spacer(Modifier.height(16.dp))
-            Text("ENZO BRADO", color = cs.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text("SD Bind  ·  v$ver", color = cs.onSurfaceVariant, fontSize = 14.sp)
+            Text("SD Bind", color = cs.onSurface, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("versión $ver", color = cs.onSurfaceVariant, fontSize = 14.sp)
         }
         Spacer(Modifier.height(24.dp))
         Text("Herramientas", color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
@@ -926,8 +1001,13 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text("Actualizaciones", color = cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                Text("Desde GitHub Releases, sola", color = cs.onSurfaceVariant, fontSize = 12.sp)
+                Text(
+                    "Busca en GitHub si hay una versión nueva. Si la hay, descarga el zip, instala el módulo y actualiza la app.",
+                    color = cs.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
             }
+            Spacer(Modifier.width(8.dp))
             Button(
                 onClick = onCheck,
                 enabled = !busy,
@@ -947,28 +1027,28 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
                 modifier = Modifier.weight(1f),
                 icon = Icons.Filled.Folder,
                 title = "Vínculos",
-                body = "SD u OTG al almacenamiento interno"
+                body = "Montá carpetas de SD u OTG dentro del interno"
             )
             AboutMiniCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Filled.Build,
                 title = "Módulo",
-                body = "KernelSU + WebUI de respaldo"
+                body = "KernelSU con WebUI de respaldo"
             )
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             AboutMiniCard(
                 modifier = Modifier.weight(1f),
-                icon = Icons.Filled.SdCard,
-                title = "OTG",
-                body = "Popup al conectar USB"
+                icon = Icons.Filled.FolderOpen,
+                title = "Explorador",
+                body = "Elegí origen y destino tocando +"
             )
             AboutMiniCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Filled.ColorLens,
                 title = "Material You",
-                body = "Colores dinámicos del sistema"
+                body = "Colores y formas dinámicos del sistema"
             )
         }
         Spacer(Modifier.height(96.dp))

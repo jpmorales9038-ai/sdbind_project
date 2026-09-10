@@ -195,12 +195,46 @@ h2 { font-size: 18px; margin: 0 0 12px; }
 
 .about-hero {
   display: flex; flex-direction: column; align-items: center; text-align: center;
-  background: var(--surface); border-radius: 36px; padding: 24px; margin-bottom: 20px;
+  background: var(--surface); border-radius: 36px; padding: 28px 24px; margin-bottom: 20px;
 }
-.about-avatar {
-  width: 128px; height: 128px; border-radius: 36px; object-fit: cover; margin-bottom: 12px;
+.app-mark {
+  width: min(38vw, 168px);
+  aspect-ratio: 1;
+  position: relative;
+  margin-bottom: 16px;
 }
-.about-name { font-size: 22px; font-weight: 700; }
+.app-mark svg { width: 100%; height: 100%; display: block; }
+.mark-track { fill: none; stroke: var(--surface-2); stroke-width: 8; }
+.mark-arc {
+  fill: none; stroke: var(--primary); stroke-width: 8; stroke-linecap: round;
+  stroke-dasharray: 72 100;
+  transform-origin: 50px 50px;
+  animation: markspin 8s linear infinite, markdash 1.8s ease-in-out infinite alternate;
+}
+.mark-arc2 {
+  fill: none; stroke: var(--secondary, #c48aa8); stroke-width: 6; stroke-linecap: round;
+  stroke-dasharray: 48 100;
+  transform-origin: 50px 50px;
+  animation: markspin 11s linear infinite reverse;
+}
+.mark-core {
+  position: absolute; inset: 29%;
+  border-radius: 32%;
+  background: var(--primary); color: var(--on-primary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 700;
+  animation: markpulse 1.6s ease-in-out infinite;
+}
+@keyframes markspin { to { transform: rotate(360deg); } }
+@keyframes markdash {
+  from { stroke-dasharray: 42 100; }
+  to { stroke-dasharray: 82 100; }
+}
+@keyframes markpulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.07); }
+}
+.about-name { font-size: 24px; font-weight: 700; }
 .about-ver { font-size: 14px; color: var(--muted); }
 .tool-wide {
   display: flex; align-items: center; gap: 12px;
