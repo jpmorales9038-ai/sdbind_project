@@ -16,6 +16,28 @@ touch "$LOG"
 chmod 644 "$CONF" "$LOG" 2>/dev/null
 chmod 755 "$MODPATH/webctl.sh" "$MODPATH/service.sh" "$MODPATH/post-fs-data.sh" "$MODPATH/uninstall.sh" "$MODPATH/common/functions.sh" 2>/dev/null
 
+WEB="$MODPATH/webroot"
+mkdir -p "$WEB"
+for f in \
+    /system/fonts/GoogleSansRounded-Regular.ttf \
+    /system/fonts/GoogleSansRounded-Medium.ttf \
+    /system/fonts/GoogleSansRounded-Bold.ttf \
+    /system/fonts/GoogleSansFlex.ttf \
+    /system/fonts/GoogleSansFlex-Variable.ttf \
+    /system/fonts/GoogleSans-Regular.ttf \
+    /product/fonts/GoogleSansRounded-Regular.ttf
+do
+    [ -f "$f" ] || continue
+    cp -f "$f" "$WEB/$(basename "$f")" 2>/dev/null
+done
+find /system/fonts /product/fonts /system_ext/fonts \
+    \( -iname '*GoogleSansRound*' -o -iname '*GoogleSansFlex*' \) 2>/dev/null |
+while read -r f; do
+    [ -f "$f" ] || continue
+    cp -f "$f" "$WEB/$(basename "$f")" 2>/dev/null
+done
+chmod 644 "$WEB"/*.ttf "$WEB"/*.otf 2>/dev/null
+
 APK="$MODPATH/app/sdcard-bind-manager.apk"
 if [ -f "$APK" ]; then
     ui_print "- APK incluido: si la app no está, instalala a mano (sdcard-bind-manager.apk)"

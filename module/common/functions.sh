@@ -205,3 +205,27 @@ dump_storage() {
     done
 }
 
+
+theme_seed() {
+    pkg=$(settings get secure theme_customization_overlay_packages 2>/dev/null)
+    echo "$pkg" | tr ',{}' '\n' | grep -i system_palette | grep -oE '[0-9A-Fa-f]{6,8}' | head -1
+}
+
+find_gsr() {
+    for f in \
+        /system/fonts/GoogleSansRounded-Regular.ttf \
+        /system/fonts/GoogleSansRounded-Medium.ttf \
+        /system/fonts/GoogleSansRounded-VF.ttf \
+        /product/fonts/GoogleSansRounded-Regular.ttf \
+        /system_ext/fonts/GoogleSansRounded-Regular.ttf \
+        /system/fonts/GoogleSansFlex-Variable.ttf \
+        /system/fonts/GoogleSansFlex.ttf \
+        /system/fonts/GoogleSansFlex-Regular.ttf \
+        /system/fonts/GoogleSans-Regular.ttf
+    do
+        [ -f "$f" ] && echo "$f"
+    done
+    find /system/fonts /product/fonts /system_ext/fonts \
+        \( -iname '*GoogleSansRound*' -o -iname '*GoogleSansFlex*' -o -iname 'GoogleSans-Regular*' \) \
+        2>/dev/null
+}

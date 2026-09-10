@@ -64,7 +64,20 @@ case "$1" in
         dump_storage
         ;;
 
+    theme)
+        seed=$(theme_seed)
+        [ -n "$seed" ] && echo "SEED|$seed"
+        if [ -f "$MODDIR/webroot/theme.css" ] && grep -q -- "--primary" "$MODDIR/webroot/theme.css" 2>/dev/null; then
+            echo "CSS|1"
+        else
+            echo "CSS|0"
+        fi
+        find_gsr | sort -u | while read -r f; do
+            [ -n "$f" ] && echo "FONT|$f"
+        done
+        ;;
+
     *)
-        echo "Uso: webctl.sh {apply|unmount|status|detect|list_children <ruta>|log|storage}"
+        echo "Uso: webctl.sh {apply|unmount|status|detect|list_children <ruta>|log|storage|theme}"
         ;;
 esac

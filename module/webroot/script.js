@@ -369,12 +369,132 @@ document.getElementById("pickerOk").onclick = function () {
 function boot(found) {
   if (found) {
     setBadge("conectado", "ok");
+    loadThemeAndFont();
     refreshAll();
     startVolumeWatch();
   } else {
     setBadge("sin acceso", "bad");
     syncEmpty();
   }
+}
+
+function hexToRgb(hex) {
+  hex = String(hex || "").replace("#", "");
+  if (hex.length === 8) hex = hex.slice(2);
+  if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  var n = parseInt(hex, 16);
+  if (isNaN(n)) return null;
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  var max = Math.max(r, g, b), min = Math.min(r, g, b);
+  var h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    var d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return { h: h, s: s * 100, l: l * 100 };
+}
+
+function hslCss(h, s, l) {
+  return "hsl(" + Math.round(h) + ", " + Math.round(s) + "%, " + Math.round(l) + "%)";
+}
+
+function applySeed(seed) {
+  var rgb = hexToRgb(seed);
+  if (!rgb) return;
+  var hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+  var h = hsl.h, s = Math.min(42, Math.max(18, hsl.s));
+  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  var r = document.documentElement.style;
+  function set(k, v) { r.setProperty(k, v); }
+  if (dark) {
+    set("--bg", hslCss(h, 18, 8));
+    set("--text", hslCss(h, 12, 94));
+    set("--muted", hslCss(h, 10, 70));
+    set("--primary", hslCss(h, s, 80));
+    set("--on-primary", hslCss(h, 28, 16));
+    set("--surface", hslCss(h, 16, 14));
+    set("--surface-2", hslCss(h, 14, 20));
+    set("--secondary", hslCss(h, s * 0.75, 72));
+    set("--danger", hslCss(8, 55, 72));
+    set("--ok", hslCss(145, 28, 70));
+    set("--warn", hslCss(42, 48, 70));
+  } else {
+    set("--bg", hslCss(h, 16, 96));
+    set("--text", hslCss(h, 18, 12));
+    set("--muted", hslCss(h, 10, 38));
+    set("--primary", hslCss(h, s, 38));
+    set("--on-primary", hslCss(h, 20, 97));
+    set("--surface", hslCss(h, 18, 92));
+    set("--surface-2", hslCss(h, 14, 86));
+    set("--secondary", hslCss(h, s * 0.8, 42));
+    set("--danger", hslCss(8, 62, 42));
+    set("--ok", hslCss(145, 35, 32));
+    set("--warn", hslCss(42, 55, 38));
+  }
+}
+
+function injectCss(text) {
+  var old = document.getElementById("monet");
+  if (old) old.parentNode.removeChild(old);
+  var s = document.createElement("style");
+  s.id = "monet";
+  s.textContent = text;
+  document.head.appendChild(s);
+}
+
+function injectFontFace(url) {
+  var old = document.getElementById("gsr-font");
+  if (old) old.parentNode.removeChild(old);
+  var s = document.createElement("style");
+  s.id = "gsr-font";
+  s.textContent = '@font-face{font-family:"Google Sans Rounded";src:url(' + url + ') format("truetype");font-weight:1 1000;font-display:swap;}';
+  document.head.appendChild(s);
+  document.body.style.fontFamily = '"Google Sans Rounded", sans-serif';
+}
+
+function b64ToFontUrl(b64) {
+  var raw = atob(String(b64).replace(/\s+/g, ""));
+  var arr = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  var blob = new Blob([arr], { type: "font/ttf" });
+  return URL.createObjectURL(blob);
+}
+
+function loadThemeAndFont() {
+  return sh(WEBCTL + " theme").then(function (res) {
+    var seed = "";
+    var hasCss = false;
+    var font = "";
+    String(res.stdout).split("\n").forEach(function (line) {
+      var p = line.trim().split("|");
+      if (p[0] === "SEED") seed = p[1] || "";
+      if (p[0] === "CSS") hasCss = p[1] === "1";
+      if (p[0] === "FONT" && !font) font = p.slice(1).join("|");
+    });
+    var jobs = [];
+    if (hasCss) {
+      jobs.push(sh("cat " + MODDIR + "/webroot/theme.css").then(function (c) {
+        if (c.stdout && c.stdout.indexOf("--primary") >= 0) injectCss(c.stdout);
+        else if (seed) applySeed(seed);
+      }));
+    } else if (seed) {
+      applySeed(seed);
+    }
+    if (font) {
+      jobs.push(sh("base64 " + font).then(function (b) {
+        if (b.stdout && b.stdout.length > 100) injectFontFace(b64ToFontUrl(b.stdout));
+      }));
+    }
+    return Promise.all(jobs);
+  }).catch(function () {});
 }
 
 function startVolumeWatch() {
