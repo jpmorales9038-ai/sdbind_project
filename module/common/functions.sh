@@ -34,16 +34,15 @@ strip_slash() {
 run_global() {
     if [ -r /proc/1/ns/mnt ]; then
         if command -v nsenter >/dev/null 2>&1; then
-            nsenter -t 1 -m -- "$@"
-            return $?
+            nsenter -t 1 -m -- "$@" && return $?
+            nsenter --mount=/proc/1/ns/mnt -- "$@" && return $?
         fi
         if [ -x /system/bin/nsenter ]; then
-            /system/bin/nsenter -t 1 -m -- "$@"
-            return $?
+            /system/bin/nsenter -t 1 -m -- "$@" && return $?
+            /system/bin/nsenter --mount=/proc/1/ns/mnt -- "$@" && return $?
         fi
         if [ -x /system/bin/toybox ]; then
-            /system/bin/toybox nsenter -t 1 -m -- "$@"
-            return $?
+            /system/bin/toybox nsenter -t 1 -m -- "$@" && return $?
         fi
     fi
     "$@"
@@ -179,42 +178,54 @@ remove_entry() {
     chmod 644 "$CONF" 2>/dev/null
 }
 
-# SIZE|USED|AVAIL|PERCENT — solo si df reporta ESTE mountpoint (no el padre 2.6G)
+# SIZE|USED|AVAIL|PERCENT
 df_stats() {
     mp=$(strip_slash "$1")
     [ -n "$mp" ] || return 1
-    run_global test -d "$mp" || return 1
     line=$(run_global df -Ph "$mp" 2>/dev/null | awk 'NR==2 {print}')
     [ -n "$line" ] || line=$(run_global df -h "$mp" 2>/dev/null | awk 'NR==2 {print}')
+    [ -n "$line" ] || line=$(df -Ph "$mp" 2>/dev/null | awk 'NR==2 {print}')
     [ -n "$line" ] || return 1
-    reported=$(echo "$line" | awk '{print $NF}')
-    reported=$(strip_slash "$reported")
-    [ "$reported" = "$mp" ] || return 1
     echo "$line" | awk '{
         gsub(/%/, "", $(NF-1))
         print $(NF-4) "|" $(NF-3) "|" $(NF-2) "|" $(NF-1)
     }'
 }
 
-# INTERNAL|/data|52G|46G|6.8G|88
-# EXTERNAL|/mnt/media_rw/XXXX-XXXX|117G|49G|68G|42
 dump_storage() {
-    if stats=$(df_stats /data); then
-        echo "INTERNAL|/data|$stats"
-    elif stats=$(df_stats /data/media); then
-        echo "INTERNAL|/data/media|$stats"
-    elif stats=$(df_stats /storage/emulated/0); then
-        echo "INTERNAL|/storage/emulated/0|$stats"
-    fi
+    df_out=$(run_global df -Ph 2>/dev/null)
+    [ -n "$df_out" ] || df_out=$(df -Ph 2>/dev/null)
+
+    echo "$df_out" | awk '
+        NR == 1 { next }
+        {
+            m = $NF
+            sub(/\/$/, "", m)
+            gsub(/%/, "", $(NF-1))
+            stats = $(NF-4) "|" $(NF-3) "|" $(NF-2) "|" $(NF-1)
+            if (m == "/data" || m == "/data/media" || m == "/storage/emulated/0" || m == "/storage/emulated") {
+                if (!got_int) {
+                    print "INTERNAL|" m "|" stats
+                    got_int = 1
+                }
+            }
+        }
+    '
 
     seen="|"
     [ -r /proc/1/mounts ] || return 0
     while IFS= read -r d; do
         [ -n "$d" ] || continue
         id=$(basename "$d")
-        case "$id" in emulated|self|sdcard|media_rw) continue ;; esac
+        case "$id" in emulated|self|sdcard|media_rw|"") continue ;; esac
         case "$seen" in *"|$id|"*) continue ;; esac
-        stats=$(df_stats "$d") || continue
+        stats=$(echo "$df_out" | awk -v mp="$(strip_slash "$d")" '
+            NR == 1 { next }
+            { m = $NF; sub(/\/$/, "", m); if (m == mp) { gsub(/%/, "", $(NF-1)); print $(NF-4) "|" $(NF-3) "|" $(NF-2) "|" $(NF-1); exit } }
+        ')
+        if [ -z "$stats" ]; then
+            stats=$(df_stats "$d") || continue
+        fi
         echo "EXTERNAL|$d|$stats"
         seen="${seen}${id}|"
     done <<EOF

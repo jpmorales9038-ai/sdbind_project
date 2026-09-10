@@ -139,12 +139,20 @@ fun BindApp() {
     var otgPopup by remember { mutableStateOf<StorageVolume?>(null) }
     var pendingDelete by remember { mutableStateOf<MountEntry?>(null) }
     var volumesPrimed by remember { mutableStateOf(false) }
+    var popupQuietUntil by remember { mutableStateOf(0L) }
 
     fun applyVolumes(next: List<StorageVolume>) {
+        val oldIds = volumes.filter { it.kind == VolumeKind.EXTERNAL }.map { volId(it.path) }.toSet()
         val oldKey = volumes.joinToString("|") { "${it.kind}:${volId(it.path)}" }
         val newKey = next.joinToString("|") { "${it.kind}:${volId(it.path)}" }
         volumes = next
         if (oldKey != newKey) storageGen++
+        if (volumesPrimed && System.currentTimeMillis() > popupQuietUntil) {
+            val fresh = next.filter { it.kind == VolumeKind.EXTERNAL && volId(it.path) !in oldIds }
+                .filter { humanToBytes(it.totalHuman) >= 8L * 1024 * 1024 }
+                .maxByOrNull { humanToBytes(it.totalHuman) }
+            if (fresh != null) otgPopup = fresh
+        }
         volumesPrimed = true
     }
 
@@ -352,6 +360,7 @@ fun BindApp() {
                     onApply = {
                         scope.launch {
                             busy = true
+                            popupQuietUntil = System.currentTimeMillis() + 8000
                             val ok = RootOps.saveAndApply(entries)
                             snack = if (ok) "Vínculos aplicados" else "Error al montar"
                             refresh()
@@ -361,6 +370,7 @@ fun BindApp() {
                     onUnmount = {
                         scope.launch {
                             busy = true
+                            popupQuietUntil = System.currentTimeMillis() + 8000
                             RootOps.unmountAll()
                             refresh()
                             busy = false

@@ -54,11 +54,19 @@ case "$1" in
         ;;
 
     list_children)
-        TARGET="$2"
-        [ -d "$TARGET" ] || exit 1
-        for d in "$TARGET"/*; do
-            [ -d "$d" ] && echo "$d"
-        done
+        TARGET=$(strip_slash "$2")
+        [ -n "$TARGET" ] || exit 1
+        case "$TARGET" in
+            /mnt/media_rw|/mnt/expand)
+                awk -v p="$TARGET" '$2 ~ "^" p "/[^/]+$" { print $2 }' /proc/1/mounts 2>/dev/null | sort -u
+                ;;
+            *)
+                [ -d "$TARGET" ] || exit 1
+                for d in "$TARGET"/*; do
+                    [ -d "$d" ] && echo "$d"
+                done
+                ;;
+        esac
         ;;
 
     log)

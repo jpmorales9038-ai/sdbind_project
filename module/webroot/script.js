@@ -245,6 +245,18 @@ function setRing(cell, pct, free, used, total, label) {
 
 function loadStorage() {
   return sh(WEBCTL + " storage").then(function (res) {
+    var out = String(res.stdout || "");
+    if (out.indexOf("INTERNAL|") < 0 && out.indexOf("EXTERNAL|") < 0) {
+      return sh("cat " + MODDIR + "/storage.cache 2>/dev/null").then(function (c) {
+        res.stdout = c.stdout || "";
+        return paintStorage(res);
+      });
+    }
+    return paintStorage(res);
+  });
+}
+
+function paintStorage(res) {
     var box = document.getElementById("rings");
     if (!box) return;
     box.innerHTML = "";
@@ -269,7 +281,6 @@ function loadStorage() {
       add(externals[b], true, id ? "SD " + id : "SD / OTG");
     }
     lastVolKey = volKeyFromStdout(res.stdout);
-  });
 }
 
 function refreshAll() {

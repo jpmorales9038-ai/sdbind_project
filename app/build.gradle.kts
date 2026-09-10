@@ -12,8 +12,8 @@ android {
         applicationId = "com.sdcardbind.manager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 16
-        versionName = "2.4.7"
+        versionCode = 17
+        versionName = "2.4.8"
     }
 
     buildTypes {

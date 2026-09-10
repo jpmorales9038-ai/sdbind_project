@@ -85,8 +85,12 @@ object RootOps {
     }
 
     suspend fun listSubdirectories(path: String): List<String> {
-        val cmd = "find " + shQuote(path.trimEnd('/').ifBlank { "/" }) +
-            " -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort"
+        val raw = path.trimEnd('/').ifBlank { "/" }
+        if (raw == "/mnt/media_rw" || raw == "/mnt/expand") {
+            val awk = "awk -v p=" + shQuote(raw) + " '\$2 ~ \"^\" p \"/[^/]+\$\" { print \$2 }' /proc/1/mounts 2>/dev/null | sort -u"
+            return exec(awk).filter { it.isNotBlank() }.map { normalizeDir(it) }
+        }
+        val cmd = "find " + shQuote(raw) + " -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort"
         return exec(cmd).filter { it.isNotBlank() }.map { normalizeDir(it) }
     }
 
@@ -153,11 +157,19 @@ object RootOps {
     }
 
     suspend fun storageVolumes(): List<StorageVolume> {
-        val lines = exec("sh $WEBCTL storage")
-        if (lines.any { it.startsWith("INTERNAL|") || it.startsWith("EXTERNAL|") }) {
-            return lines.mapNotNull { parseStorageLine(it) }
+        var lines = exec("sh $WEBCTL storage")
+        var parsed = lines.mapNotNull { parseStorageLine(it) }
+        if (parsed.isEmpty()) {
+            parsed = exec("cat $MODDIR/storage.cache 2>/dev/null").mapNotNull { parseStorageLine(it) }
+        } else {
+            val body = lines.filter { it.startsWith("INTERNAL|") || it.startsWith("EXTERNAL|") }.joinToString("\n")
+            if (body.isNotBlank()) {
+                withContext(Dispatchers.IO) {
+                    Shell.cmd("cat > $MODDIR/storage.cache << 'SDBIND_ST'\n$body\nSDBIND_ST").exec()
+                }
+            }
         }
-        return fallbackDf()
+        return parsed
     }
 
     private fun parseStorageLine(line: String): StorageVolume? {
