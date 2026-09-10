@@ -510,8 +510,17 @@ function checkUpdate() {
       if (!zip) { toast("La release no trae un .zip"); return; }
       toast("Descargando " + json.tag_name + "...");
       var tmp = "/data/local/tmp/sdbind_update.zip";
-      return sh("curl -L -o " + tmp + " " + JSON.stringify(zip) + " && (ksud module install " + tmp + " || magisk --install-module " + tmp + ") && unzip -o " + tmp + " 'app/*.apk' -d /data/local/tmp/sdbind_up >/dev/null 2>&1; pm install -r /data/local/tmp/sdbind_up/app/*.apk >/dev/null 2>&1; true")
-        .then(function () { toast("Actualizado a " + json.tag_name + ". Reiniciá si hace falta."); });
+      var pub = "/storage/emulated/0/Download/sdbind_update.zip";
+      return sh(
+        "curl -L -o " + tmp + " " + JSON.stringify(zip) +
+        " && cp " + tmp + " " + pub + " && chmod 644 " + pub +
+        "; am start -a android.intent.action.VIEW -t application/zip -d file://" + pub + " --grant-read-uri-permission --user 0" +
+        " || am start -n com.rifsxd.ksunext/.ui.MainActivity --user 0" +
+        " || am start -n me.weishu.kernelsu/.ui.MainActivity --user 0" +
+        "; true"
+      ).then(function () {
+        toast(json.tag_name + " en Descargas. Abrilo con KernelSU para flashear.");
+      });
     });
   }).catch(function (err) { toast(err.message || String(err)); });
 }

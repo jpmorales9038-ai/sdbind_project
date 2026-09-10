@@ -1,6 +1,9 @@
 package com.sdcardbind.manager
 
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import androidx.core.content.FileProvider
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -9,10 +12,11 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * Repo de GitHub para releases. Una línea `usuario/repo` en
- * /data/adb/modules/sdcard_bind_ui/github.repo (se instala con el módulo).
- */
+sealed class UpdateOutcome {
+    data class Ready(val tag: String, val zip: File) : UpdateOutcome()
+    data class Info(val message: String) : UpdateOutcome()
+}
+
 object Updater {
 
     const val DEFAULT_REPO = "jpmorales9038-ai/sdbind_project"
@@ -25,40 +29,69 @@ object Updater {
         if (fromModule.contains("/")) fromModule else DEFAULT_REPO
     }
 
-    suspend fun checkAndInstall(context: Context, localVersion: String): String = withContext(Dispatchers.IO) {
-        val repo = configuredRepo()
-        val body = httpGet("https://api.github.com/repos/$repo/releases/latest")
-            ?: return@withContext "No se pudo hablar con GitHub"
-        val json = JSONObject(body)
-        if (json.has("message") && !json.has("tag_name")) {
-            val msg = json.optString("message")
-            return@withContext if (msg.contains("Not Found", true))
-                "Todavía no hay releases. Subí este código a GitHub y esperá a que Actions publique uno."
-            else msg
+    suspend fun checkAndDownload(context: Context, localVersion: String): UpdateOutcome =
+        withContext(Dispatchers.IO) {
+            val repo = configuredRepo()
+            val body = httpGet("https://api.github.com/repos/$repo/releases/latest")
+                ?: return@withContext UpdateOutcome.Info("No se pudo hablar con GitHub")
+            val json = JSONObject(body)
+            if (json.has("message") && !json.has("tag_name")) {
+                val msg = json.optString("message")
+                return@withContext UpdateOutcome.Info(
+                    if (msg.contains("Not Found", true))
+                        "Todavía no hay releases. Subí este código a GitHub y esperá a que Actions publique uno."
+                    else msg
+                )
+            }
+            val tag = json.optString("tag_name").ifBlank { json.optString("name") }
+            if (!isNewer(tag, localVersion)) {
+                return@withContext UpdateOutcome.Info("Ya estás al día ($localVersion)")
+            }
+            val zipUrl = findAsset(json, ".zip")
+                ?: return@withContext UpdateOutcome.Info("La release $tag no trae un .zip")
+            val dest = File(context.cacheDir, "sdbind_update.zip")
+            httpDownload(zipUrl, dest)
+            if (!dest.exists() || dest.length() < 1024) {
+                return@withContext UpdateOutcome.Info("La descarga quedó vacía")
+            }
+            Shell.cmd(
+                "cp ${shQuote(dest.absolutePath)} /storage/emulated/0/Download/sdbind_update.zip && " +
+                    "chmod 644 /storage/emulated/0/Download/sdbind_update.zip"
+            ).exec()
+            UpdateOutcome.Ready(tag, dest)
         }
-        val tag = json.optString("tag_name").ifBlank { json.optString("name") }
-        if (!isNewer(tag, localVersion)) {
-            return@withContext "Ya estás al día ($localVersion)"
+
+    fun openForFlash(context: Context, zip: File) {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            zip
+        )
+        val view = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/zip")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        val zipUrl = findAsset(json, ".zip")
-            ?: return@withContext "La release $tag no trae un .zip"
-        val dest = File(context.cacheDir, "sdbind_update.zip")
-        httpDownload(zipUrl, dest)
-        if (!dest.exists() || dest.length() < 1024) {
-            return@withContext "La descarga quedó vacía"
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        runCatching {
+            context.packageManager.queryIntentActivities(view, PackageManager.MATCH_DEFAULT_ONLY)
+                .forEach { ri ->
+                    context.grantUriPermission(ri.activityInfo.packageName, uri, flags)
+                }
         }
-        val tmp = "/data/local/tmp/sdbind_update.zip"
-        Shell.cmd("cp ${shQuote(dest.absolutePath)} $tmp").exec()
-        val install = Shell.cmd(
-            "ksud module install $tmp 2>/dev/null || magisk --install-module $tmp 2>/dev/null"
-        ).exec()
-        Shell.cmd(
-            "mkdir -p /data/local/tmp/sdbind_up && " +
-                "unzip -o $tmp 'app/*.apk' -d /data/local/tmp/sdbind_up >/dev/null 2>&1 && " +
-                "pm install -r /data/local/tmp/sdbind_up/app/*.apk >/dev/null 2>&1; true"
-        ).exec()
-        if (install.isSuccess) "Actualizado a $tag. Si el módulo no carga, reiniciá."
-        else "Descargado $tag pero falló la instalación del módulo"
+        listOf(
+            "com.rifsxd.ksunext",
+            "me.weishu.kernelsu",
+            "com.topjohnwu.magisk",
+            "me.bmax.apatch"
+        ).forEach { pkg ->
+            runCatching { context.grantUriPermission(pkg, uri, flags) }
+        }
+        val chooser = Intent.createChooser(view, "Flashear el módulo con").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(Intent.EXTRA_TITLE, "Flashear el módulo con")
+        }
+        context.startActivity(chooser)
     }
 
     private fun isNewer(remote: String, local: String): Boolean {

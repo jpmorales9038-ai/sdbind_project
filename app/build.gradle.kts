@@ -12,13 +12,26 @@ android {
         applicationId = "com.sdcardbind.manager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 23
-        versionName = "2.5.2"
+        versionCode = 24
+        versionName = "2.5.3"
+    }
+
+    signingConfigs {
+        create("stable") {
+            storeFile = file("sdbind.keystore")
+            storePassword = "SdBind!mod"
+            keyAlias = "sdbind"
+            keyPassword = "SdBind!mod"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("stable")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("stable")
         }
     }
 

@@ -364,8 +364,15 @@ fun BindApp() {
                             snack = "Buscando actualizaciones..."
                             val ver = runCatching {
                                 context.packageManager.getPackageInfo(context.packageName, 0).versionName
-                            }.getOrNull() ?: "2.5.0"
-                            snack = Updater.checkAndInstall(context, ver ?: "2.5.0")
+                            }.getOrNull() ?: "2.5.3"
+                            when (val out = Updater.checkAndDownload(context, ver ?: "2.5.3")) {
+                                is UpdateOutcome.Info -> snack = out.message
+                                is UpdateOutcome.Ready -> {
+                                    snack = "${out.tag} descargada. Elegí con qué flashearla."
+                                    runCatching { Updater.openForFlash(context, out.zip) }
+                                        .onFailure { snack = "Guardada en Descargas/sdbind_update.zip" }
+                                }
+                            }
                             busy = false
                         }
                     }
@@ -1002,7 +1009,7 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text("Actualizaciones", color = cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 Text(
-                    "Busca en GitHub si hay una versión nueva. Si la hay, descarga el zip, instala el módulo y actualiza la app.",
+                    "Si hay una versión nueva, descarga el zip y te pregunta con qué app flashearlo (KernelSU).",
                     color = cs.onSurfaceVariant,
                     fontSize = 12.sp
                 )

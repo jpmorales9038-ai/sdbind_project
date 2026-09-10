@@ -40,7 +40,13 @@ chmod 644 "$WEB"/*.ttf "$WEB"/*.otf 2>/dev/null
 
 APK="$MODPATH/app/sdcard-bind-manager.apk"
 if [ -f "$APK" ]; then
-    ui_print "- APK incluido: si la app no está, instalala a mano (sdcard-bind-manager.apk)"
+    ui_print "- Instalando SD Bind Manager"
+    if pm install -r "$APK" >/dev/null 2>&1; then
+        ui_print "- App instalada / actualizada"
+    else
+        ui_print "- No se pudo actualizar la app (firma distinta a la instalada)."
+        ui_print "  Desinstalá SD Bind una vez y volvé a flashear el módulo."
+    fi
 fi
 
 ui_print "- Configurá las carpetas en la app o en la WebUI, luego 'Guardar y montar'"
