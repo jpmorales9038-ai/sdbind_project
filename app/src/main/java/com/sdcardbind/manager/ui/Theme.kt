@@ -1,40 +1,54 @@
 package com.sdcardbind.manager.ui
 
+import android.app.Activity
+import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 
-val FyloBg = Color(0xFF1A1218)
-val FyloSurface = Color(0xFF2B1F26)
-val FyloSurfaceHigh = Color(0xFF362830)
-val FyloNav = Color(0xFF3D2A34)
-val FyloAccent = Color(0xFFE8A8C8)
-val FyloAccentDim = Color(0xFF5A3148)
-val FyloOnAccent = Color(0xFF3A1828)
-val FyloMuted = Color(0xFFB9A4AE)
-val FyloOk = Color(0xFF8FCB9A)
-val FyloWarn = Color(0xFFE8C07A)
-val FyloDanger = Color(0xFFE07A7A)
-val FyloWhite = Color(0xFFF8EEF3)
-
-val CatGreen = Color(0xFF3E5C48)
-val CatRed = Color(0xFF8B4E42)
-val CatGold = Color(0xFF8B6B3C)
-val CatBlue = Color(0xFF3A4E78)
-
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun FyloTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = FyloAccent,
-            onPrimary = FyloOnAccent,
-            background = FyloBg,
-            surface = FyloSurface,
-            onBackground = FyloWhite,
-            onSurface = FyloWhite,
-            error = FyloDanger
-        ),
+fun AppTheme(content: @Composable () -> Unit) {
+    val dark = isSystemInDarkTheme()
+    val view = LocalView.current
+    val context = view.context
+    val colorScheme = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        dark -> darkColorScheme()
+        else -> lightColorScheme()
+    }
+    val shapes = Shapes(
+        extraSmall = RoundedCornerShape(12.dp),
+        small = RoundedCornerShape(16.dp),
+        medium = RoundedCornerShape(22.dp),
+        large = RoundedCornerShape(28.dp),
+        extraLarge = RoundedCornerShape(36.dp)
+    )
+
+    SideEffect {
+        val window = (view.context as Activity).window
+        WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !dark
+        WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !dark
+    }
+
+    MaterialExpressiveTheme(
+        colorScheme = colorScheme,
+        motionScheme = MotionScheme.expressive(),
+        shapes = shapes,
         content = content
     )
 }
