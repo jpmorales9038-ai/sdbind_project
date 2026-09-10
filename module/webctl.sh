@@ -60,7 +60,11 @@ case "$1" in
         tail -n 150 "$MODDIR/mount.log" 2>/dev/null
         ;;
 
+    storage)
+        dump_storage
+        ;;
+
     *)
-        echo "Uso: webctl.sh {apply|unmount|status|detect|list_children <ruta>|log}"
+        echo "Uso: webctl.sh {apply|unmount|status|detect|list_children <ruta>|log|storage}"
         ;;
 esac

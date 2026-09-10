@@ -15,13 +15,25 @@ data class MountEntry(
     val status: String = ""
 )
 
+enum class VolumeKind { INTERNAL, EXTERNAL }
+
 data class StorageVolume(
+    val kind: VolumeKind,
     val path: String,
     val totalHuman: String,
     val usedHuman: String,
     val availHuman: String,
     val usePercent: Int
-)
+) {
+    val label: String
+        get() = when (kind) {
+            VolumeKind.INTERNAL -> "Interno"
+            VolumeKind.EXTERNAL -> {
+                val id = path.trimEnd('/').substringAfterLast('/')
+                if (id.isBlank() || id == "media_rw") "SD / OTG" else "SD $id"
+            }
+        }
+}
 
 fun shQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
@@ -112,28 +124,54 @@ object RootOps {
     }
 
     suspend fun storageVolumes(): List<StorageVolume> {
-        val lines = exec("df -h 2>/dev/null")
+        val lines = exec("sh $WEBCTL storage")
+        if (lines.any { it.startsWith("INTERNAL|") || it.startsWith("EXTERNAL|") }) {
+            return lines.mapNotNull { parseStorageLine(it) }
+        }
+        return fallbackDf()
+    }
+
+    private fun parseStorageLine(line: String): StorageVolume? {
+        val p = line.trim().split("|")
+        if (p.size < 6) return null
+        val kind = when (p[0]) {
+            "INTERNAL" -> VolumeKind.INTERNAL
+            "EXTERNAL" -> VolumeKind.EXTERNAL
+            else -> return null
+        }
+        return StorageVolume(
+            kind = kind,
+            path = p[1],
+            totalHuman = p[2],
+            usedHuman = p[3],
+            availHuman = p[4],
+            usePercent = p[5].toIntOrNull() ?: 0
+        )
+    }
+
+    private suspend fun fallbackDf(): List<StorageVolume> {
+        val lines = exec("df -Ph 2>/dev/null")
         val result = mutableListOf<StorageVolume>()
         for (line in lines) {
             val cols = line.trim().split(Regex("\\s+"))
             if (cols.size < 6) continue
-            val mountPoint = cols[5]
-            val isRelevant = mountPoint == "/storage/emulated" ||
-                mountPoint.startsWith("/storage/emulated/0") ||
-                mountPoint.startsWith("/mnt/media_rw")
-            if (!isRelevant) continue
-            val usePercentStr = cols[4].removeSuffix("%")
-            val usePercent = usePercentStr.toIntOrNull() ?: 0
+            val mp = cols[5]
+            val kind = when {
+                mp == "/data" || mp == "/data/media" || mp.startsWith("/storage/emulated") -> VolumeKind.INTERNAL
+                mp.startsWith("/mnt/media_rw/") -> VolumeKind.EXTERNAL
+                else -> continue
+            }
             result.add(
                 StorageVolume(
-                    path = mountPoint,
+                    kind = kind,
+                    path = mp,
                     totalHuman = cols[1],
                     usedHuman = cols[2],
                     availHuman = cols[3],
-                    usePercent = usePercent
+                    usePercent = cols[4].removeSuffix("%").toIntOrNull() ?: 0
                 )
             )
         }
-        return result.distinctBy { it.path }
+        return result.distinctBy { it.kind to it.path }
     }
 }

@@ -2,44 +2,90 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>SD/OTG Bind Mount</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>SD Bind</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>SD/OTG Bind Mount</h1>
-    <span id="bridgeStatus" class="badge">comprobando…</span>
-  </header>
+  <div id="app">
+    <header class="top">
+      <h1>SD Bind</h1>
+      <span id="bridgeStatus" class="badge">comprobando…</span>
+    </header>
 
-  <main>
-    <section class="card">
-      <h2>Carpetas configuradas</h2>
-      <div id="rows" class="rows"></div>
-      <button id="addRowBtn" class="btn secondary">+ Añadir carpeta</button>
-    </section>
+    <div class="layout">
+      <section class="pane-storage">
+        <div class="card">
+          <p class="kicker">Almacenamiento</p>
+          <div class="rings">
+            <div class="cell" id="cellInternal">
+              <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="track" cx="50" cy="50" r="40" />
+                <circle class="arc" cx="50" cy="50" r="40" />
+                <text x="50" y="54" text-anchor="middle">—</text>
+              </svg>
+              <div class="cell-label">Interno</div>
+              <div class="cell-free">—</div>
+              <div class="cell-used">—</div>
+            </div>
+            <div class="cell" id="cellExternal">
+              <svg class="ring secondary" viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="track" cx="50" cy="50" r="40" />
+                <circle class="arc" cx="50" cy="50" r="40" />
+                <text x="50" y="54" text-anchor="middle">—</text>
+              </svg>
+              <div class="cell-label">SD / OTG</div>
+              <div class="cell-free">Sin unidad</div>
+              <div class="cell-used"></div>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="saveApplyBtn" class="btn primary">Guardar y montar</button>
+          <button id="unmountBtn" class="btn danger">Desmontar todo</button>
+        </div>
+      </section>
 
-    <section class="card">
-      <h2>Detectar SD / OTG</h2>
-      <p class="hint">Busca tarjetas SD y unidades OTG ya montadas por el sistema.</p>
-      <button id="detectBtn" class="btn secondary">Buscar unidades</button>
-      <div id="detected" class="detected-list"></div>
-    </section>
+      <section class="pane-binds" id="homePane">
+        <h2>Vínculos</h2>
+        <div id="rows" class="rows"></div>
+        <p id="emptyHint" class="empty">Nada vinculado todavía. Tocá + y elegí origen y destino.</p>
+      </section>
 
-    <section class="card actions">
-      <button id="saveApplyBtn" class="btn primary">Guardar y montar</button>
-      <button id="unmountBtn" class="btn danger">Desmontar todo</button>
-      <button id="refreshStatusBtn" class="btn secondary">Actualizar estado</button>
-    </section>
+      <section class="pane-log hidden" id="logPane">
+        <h2>Registro</h2>
+        <pre id="log" class="log"></pre>
+      </section>
+    </div>
 
-    <section class="card">
-      <h2>Registro</h2>
-      <pre id="log" class="log"></pre>
-    </section>
-  </main>
+    <button id="fab" class="fab" title="Añadir vínculo">+</button>
+
+    <nav class="bottom" id="bottomNav">
+      <button class="navchip on" data-tab="home">Inicio</button>
+      <button class="navchip" data-tab="log">Registro</button>
+    </nav>
+  </div>
+
+  <div id="picker" class="picker hidden">
+    <div class="picker-head">
+      <button id="pickerBack" class="icon">←</button>
+      <div>
+        <div id="pickerTitle" class="picker-title">Origen</div>
+        <div id="pickerHint" class="picker-hint"></div>
+      </div>
+    </div>
+    <div class="chips">
+      <button data-jump="/storage/emulated/0">Interno</button>
+      <button data-jump="/mnt/media_rw">SD / OTG</button>
+    </div>
+    <div id="pickerPath" class="picker-path"></div>
+    <button id="pickerUp" class="up">↑ Subir un nivel</button>
+    <div id="pickerList" class="picker-list"></div>
+    <p id="pickerWarn" class="warn hidden">Elegí una carpeta interior, no la raíz del almacenamiento.</p>
+    <button id="pickerOk" class="btn primary">Siguiente</button>
+  </div>
 
   <div id="toast" class="toast"></div>
-
   <script src="script.js"></script>
 </body>
 </html>

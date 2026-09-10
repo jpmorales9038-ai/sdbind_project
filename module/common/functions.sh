@@ -154,3 +154,51 @@ apply_mounts() {
 unmount_all() {
     each_entry _unmount_cb
 }
+
+# Una línea: SIZE|USED|AVAIL|PERCENT  (df -P evita el wrap de toybox)
+df_stats() {
+    mp="$1"
+    [ -e "$mp" ] || return 1
+    line=$(df -Ph "$mp" 2>/dev/null | awk 'NR==2 {print}')
+    [ -n "$line" ] || line=$(df -h "$mp" 2>/dev/null | awk 'NR==2 {print}')
+    [ -n "$line" ] || return 1
+    echo "$line" | awk '{
+        gsub(/%/, "", $(NF-1))
+        print $(NF-4) "|" $(NF-3) "|" $(NF-2) "|" $(NF-1)
+    }'
+}
+
+# INTERNAL|/data|52G|46G|6.8G|88
+# EXTERNAL|/mnt/media_rw/XXXX-XXXX|117G|49G|68G|42
+dump_storage() {
+    if stats=$(df_stats /data); then
+        echo "INTERNAL|/data|$stats"
+    elif stats=$(df_stats /storage/emulated); then
+        echo "INTERNAL|/storage/emulated|$stats"
+    elif stats=$(df_stats /storage/emulated/0); then
+        echo "INTERNAL|/storage/emulated/0|$stats"
+    fi
+
+    found=
+    for d in /mnt/media_rw/*; do
+        [ -d "$d" ] || continue
+        stats=$(df_stats "$d") || continue
+        echo "EXTERNAL|$d|$stats"
+        found=1
+    done
+    if [ -z "$found" ]; then
+        for d in /storage/*; do
+            [ -d "$d" ] || continue
+            case "$d" in
+                */emulated|*/self|*/sdcard) continue ;;
+            esac
+            REAL=$(readlink -f "$d" 2>/dev/null)
+            case "$REAL" in
+                /data/media*) continue ;;
+            esac
+            stats=$(df_stats "$d") || continue
+            echo "EXTERNAL|$d|$stats"
+        done
+    fi
+}
+

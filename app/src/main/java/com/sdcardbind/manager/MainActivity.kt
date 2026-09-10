@@ -1,5 +1,6 @@
 package com.sdcardbind.manager
 
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -48,6 +49,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -136,6 +138,7 @@ fun BindApp() {
         }
     }
 
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val screen = when {
         rootOk == false -> "noroot"
         flow == Flow.PickSource -> "src"
@@ -171,7 +174,7 @@ fun BindApp() {
         },
         bottomBar = {
             AnimatedVisibility(
-                visible = (screen == "home" || screen == "log") && rootOk == true,
+                visible = !landscape && (screen == "home" || screen == "log") && rootOk == true,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut()
             ) {
@@ -179,9 +182,13 @@ fun BindApp() {
             }
         }
     ) { pad ->
-        AnimatedContent(
-            targetState = screen,
-            modifier = Modifier.padding(pad),
+        Row(Modifier.fillMaxSize().padding(pad)) {
+            if (landscape && (screen == "home" || screen == "log") && rootOk == true) {
+                SideRail(tab = tab, onTab = { tab = it })
+            }
+            AnimatedContent(
+                targetState = screen,
+                modifier = Modifier.weight(1f),
             transitionSpec = {
                 val forward = targetState == "src" || (initialState == "src" && targetState == "dst")
                 if (forward) {
@@ -236,6 +243,7 @@ fun BindApp() {
                     volumes = volumes,
                     entries = entries,
                     busy = busy,
+                    landscape = landscape,
                     onToggle = { i, on ->
                         entries = entries.toMutableList().also { it[i] = it[i].copy(enabled = on) }
                     },
@@ -260,6 +268,30 @@ fun BindApp() {
                 )
             }
         }
+        }
+    }
+}
+
+@Composable
+private fun SideRail(tab: Tab, onTab: (Tab) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    NavigationRail(
+        containerColor = cs.surface,
+        modifier = Modifier.fillMaxHeight()
+    ) {
+        Spacer(Modifier.height(12.dp))
+        NavigationRailItem(
+            selected = tab == Tab.Home,
+            onClick = { onTab(Tab.Home) },
+            icon = { Icon(Icons.Filled.Home, contentDescription = "Inicio") },
+            label = { Text("Inicio") }
+        )
+        NavigationRailItem(
+            selected = tab == Tab.Log,
+            onClick = { onTab(Tab.Log) },
+            icon = { Icon(Icons.Filled.Notes, contentDescription = "Registro") },
+            label = { Text("Registro") }
+        )
     }
 }
 
@@ -335,80 +367,110 @@ private fun HomePane(
     volumes: List<StorageVolume>,
     entries: List<MountEntry>,
     busy: Boolean,
+    landscape: Boolean,
     onToggle: (Int, Boolean) -> Unit,
     onDelete: (Int) -> Unit,
     onApply: () -> Unit,
     onUnmount: () -> Unit
 ) {
+    if (landscape) {
+        Row(Modifier.fillMaxSize().padding(12.dp)) {
+            Column(
+                Modifier.weight(0.42f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(end = 8.dp)
+            ) {
+                HomeHeader()
+                Spacer(Modifier.height(16.dp))
+                StorageHero(volumes)
+                Spacer(Modifier.height(16.dp))
+                ActionButtons(busy, entries.isNotEmpty(), onApply, onUnmount)
+                Spacer(Modifier.height(24.dp))
+            }
+            Column(
+                Modifier.weight(0.58f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 8.dp)
+            ) {
+                BindList(entries, onToggle, onDelete)
+                Spacer(Modifier.height(80.dp))
+            }
+        }
+    } else {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
+        ) {
+            Spacer(Modifier.height(12.dp))
+            HomeHeader()
+            Spacer(Modifier.height(20.dp))
+            StorageHero(volumes)
+            Spacer(Modifier.height(28.dp))
+            BindList(entries, onToggle, onDelete)
+            Spacer(Modifier.height(16.dp))
+            ActionButtons(busy, entries.isNotEmpty(), onApply, onUnmount)
+            Spacer(Modifier.height(96.dp))
+        }
+    }
+}
+
+@Composable
+private fun HomeHeader() {
     val cs = MaterialTheme.colorScheme
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-    ) {
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("SD Bind", color = cs.onBackground, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Box(
-                Modifier
-                    .clip(CircleShape)
-                    .background(cs.tertiaryContainer)
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text("root ok", color = cs.onTertiaryContainer, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("SD Bind", color = cs.onBackground, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Box(
+            Modifier.clip(CircleShape).background(cs.tertiaryContainer).padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Text("root ok", color = cs.onTertiaryContainer, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
-        Spacer(Modifier.height(20.dp))
+    }
+}
 
-        StorageHero(volumes)
-        Spacer(Modifier.height(28.dp))
-
-        Text("Vínculos", color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(12.dp))
-        if (entries.isEmpty()) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.extraLarge)
-                    .background(cs.surfaceContainer)
-                    .padding(28.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Outlined.Folder, null, tint = cs.primary, modifier = Modifier.size(36.dp))
-                    Spacer(Modifier.height(10.dp))
-                    Text("Nada vinculado todavía", color = cs.onSurface, fontWeight = FontWeight.Medium)
-                    Text("Tocá + y elegí origen y destino", color = cs.onSurfaceVariant, fontSize = 13.sp)
-                }
-            }
-        } else {
-            entries.forEachIndexed { i, e ->
-                BindCard(e, onToggle = { onToggle(i, it) }, onDelete = { onDelete(i) })
+@Composable
+private fun BindList(
+    entries: List<MountEntry>,
+    onToggle: (Int, Boolean) -> Unit,
+    onDelete: (Int) -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Text("Vínculos", color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    Spacer(Modifier.height(12.dp))
+    if (entries.isEmpty()) {
+        Box(
+            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.extraLarge).background(cs.surfaceContainer).padding(28.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Outlined.Folder, null, tint = cs.primary, modifier = Modifier.size(36.dp))
                 Spacer(Modifier.height(10.dp))
+                Text("Nada vinculado todavía", color = cs.onSurface, fontWeight = FontWeight.Medium)
+                Text("Tocá + y elegí origen y destino", color = cs.onSurfaceVariant, fontSize = 13.sp)
             }
         }
-
-        Spacer(Modifier.height(16.dp))
-        Button(
-            onClick = onApply,
-            enabled = !busy && entries.isNotEmpty(),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = MaterialTheme.shapes.large
-        ) { Text("Guardar y montar", fontWeight = FontWeight.Bold) }
-        Spacer(Modifier.height(8.dp))
-        TextButton(onClick = onUnmount, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("Desmontar todo", color = cs.error)
+    } else {
+        entries.forEachIndexed { i, e ->
+            BindCard(e, onToggle = { onToggle(i, it) }, onDelete = { onDelete(i) })
+            Spacer(Modifier.height(10.dp))
         }
-        Spacer(Modifier.height(96.dp))
+    }
+}
+
+@Composable
+private fun ActionButtons(busy: Boolean, hasEntries: Boolean, onApply: () -> Unit, onUnmount: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Button(
+        onClick = onApply,
+        enabled = !busy && hasEntries,
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        shape = MaterialTheme.shapes.large
+    ) { Text("Guardar y montar", fontWeight = FontWeight.Bold) }
+    Spacer(Modifier.height(8.dp))
+    TextButton(onClick = onUnmount, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+        Text("Desmontar todo", color = cs.error)
     }
 }
 
 @Composable
 private fun StorageHero(volumes: List<StorageVolume>) {
     val cs = MaterialTheme.colorScheme
-    val internal = volumes.firstOrNull { it.path.contains("emulated") } ?: volumes.firstOrNull()
-    val sd = volumes.firstOrNull { it.path.contains("media_rw") }
+    val internal = volumes.firstOrNull { it.kind == VolumeKind.INTERNAL }
+    val externals = volumes.filter { it.kind == VolumeKind.EXTERNAL }
     Column(
         Modifier
             .fillMaxWidth()
@@ -419,47 +481,65 @@ private fun StorageHero(volumes: List<StorageVolume>) {
     ) {
         Text("Almacenamiento", color = cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(16.dp))
-        if (internal == null) {
+        if (internal == null && externals.isEmpty()) {
             Text("Sin datos todavía", color = cs.onSurfaceVariant)
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                StorageRing(internal.usePercent, Modifier.size(92.dp))
-                Spacer(Modifier.width(18.dp))
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Smartphone, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Interno", color = cs.onSurfaceVariant, fontSize = 13.sp)
-                    }
-                    Text("${internal.availHuman} libres", color = cs.onSurface, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                    Text("${internal.usedHuman} / ${internal.totalHuman}", color = cs.onSurfaceVariant, fontSize = 13.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (internal != null) {
+                    StorageCell(internal, Modifier.weight(1f), secondary = false)
                 }
-            }
-        }
-        if (sd != null) {
-            Spacer(Modifier.height(16.dp))
-            HorizontalDivider(color = cs.outlineVariant)
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.SdCard, null, tint = cs.primary, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("SD / OTG", color = cs.onSurface, fontWeight = FontWeight.Medium)
-                    Text(sd.path, color = cs.onSurfaceVariant, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (externals.isEmpty()) {
+                    StorageCell(
+                        StorageVolume(VolumeKind.EXTERNAL, "", "—", "—", "—", 0),
+                        Modifier.weight(1f),
+                        secondary = true,
+                        empty = true
+                    )
+                } else {
+                    externals.take(1).forEach { StorageCell(it, Modifier.weight(1f), secondary = true) }
                 }
-                Text("${sd.availHuman} libres", color = cs.primary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
 
 @Composable
-private fun StorageRing(percent: Int, modifier: Modifier = Modifier) {
+private fun StorageCell(
+    vol: StorageVolume,
+    modifier: Modifier = Modifier,
+    secondary: Boolean,
+    empty: Boolean = false
+) {
+    val cs = MaterialTheme.colorScheme
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        StorageRing(if (empty) 0 else vol.usePercent, Modifier.size(88.dp), secondary = secondary)
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                if (vol.kind == VolumeKind.INTERNAL) Icons.Outlined.Smartphone else Icons.Outlined.SdCard,
+                null,
+                tint = cs.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(if (empty) "SD / OTG" else vol.label, color = cs.onSurfaceVariant, fontSize = 12.sp)
+        }
+        if (empty) {
+            Text("Sin unidad", color = cs.onSurfaceVariant, fontSize = 13.sp)
+        } else {
+            Text("${vol.availHuman} libres", color = cs.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text("${vol.usedHuman} / ${vol.totalHuman}", color = cs.onSurfaceVariant, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     val p = percent.coerceIn(0, 100) / 100f
     val animated by animateFloatAsState(p, animationSpec = floatSpring, label = "ring")
-    val track = cs.primaryContainer
-    val arc = cs.primary
+    val track = if (secondary) cs.secondaryContainer else cs.primaryContainer
+    val arc = if (secondary) cs.secondary else cs.primary
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = 10.dp.toPx()
