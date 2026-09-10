@@ -342,6 +342,17 @@ document.getElementById("unmountBtn").onclick = function () {
   sh(WEBCTL + " unmount").then(refreshAll).then(function () { toast(t("done")); });
 };
 
+function layoutPill() {
+  var thumb = document.getElementById("pillThumb");
+  var host = document.querySelector("#bottomNav .pill");
+  var on = document.querySelector("#bottomNav .navchip.on");
+  if (!thumb || !host || !on) return;
+  var hr = host.getBoundingClientRect();
+  var r = on.getBoundingClientRect();
+  thumb.style.width = Math.round(r.width) + "px";
+  thumb.style.transform = "translateX(" + Math.round(r.left - hr.left) + "px)";
+}
+
 function switchTab(tab) {
   var chips = document.querySelectorAll(".navchip");
   for (var i = 0; i < chips.length; i++) {
@@ -355,6 +366,9 @@ function switchTab(tab) {
   document.getElementById("fab").className = tab === "home" ? "fab" : "fab hidden";
   if (tab === "log") refreshLog();
   if (tab === "about") loadAboutVer();
+  [0, 30, 80, 160, 280, 480].forEach(function (ms) {
+    setTimeout(layoutPill, ms);
+  });
 }
 
 document.getElementById("bottomNav").onclick = function (e) {
@@ -536,6 +550,8 @@ if (updateBtn) updateBtn.onclick = checkUpdate;
 
 function boot(found) {
   applyI18n();
+  layoutPill();
+  window.addEventListener("resize", layoutPill);
   if (found) {
     setBadge(t("connected"), "ok");
     loadThemeAndFont();

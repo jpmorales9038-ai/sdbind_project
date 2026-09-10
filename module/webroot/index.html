@@ -71,9 +71,18 @@
     <button id="fab" class="fab" title="+" data-i18n-title="add">+</button>
 
     <nav class="bottom" id="bottomNav">
-      <button class="navchip on" data-tab="home" data-i18n="home">Inicio</button>
-      <button class="navchip" data-tab="log" data-i18n="log">Registro</button>
-      <button class="navchip" data-tab="about" data-i18n="about">Acerca de</button>
+      <div class="pill">
+        <div class="pill-thumb" id="pillThumb"></div>
+        <button class="navchip on" data-tab="home">
+          <span class="nav-ico">⌂</span><span class="nav-lab" data-i18n="home">Inicio</span>
+        </button>
+        <button class="navchip" data-tab="log">
+          <span class="nav-ico">☰</span><span class="nav-lab" data-i18n="log">Registro</span>
+        </button>
+        <button class="navchip" data-tab="about">
+          <span class="nav-ico">ⓘ</span><span class="nav-lab" data-i18n="about">Acerca de</span>
+        </button>
+      </div>
     </nav>
   </div>
 

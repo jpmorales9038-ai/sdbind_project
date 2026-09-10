@@ -30,10 +30,12 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -43,6 +45,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.foundation.pager.PagerState
+import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -73,6 +80,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -144,7 +152,7 @@ fun BindApp() {
         scope.launch {
             pagerState.animateScrollToPage(
                 t.ordinal,
-                animationSpec = tween(420, easing = FastOutSlowInEasing)
+                animationSpec = tween(480, easing = FastOutSlowInEasing)
             )
         }
     }
@@ -299,18 +307,15 @@ fun BindApp() {
         },
         bottomBar = {
             AnimatedVisibility(
-                visible = !landscape && screen == "tabs" && rootOk == true,
+                visible = screen == "tabs" && rootOk == true,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut()
             ) {
-                BottomNav(tab = currentTab, onTab = goTab)
+                BottomNav(pagerState = pagerState, onTab = goTab)
             }
         }
     ) { pad ->
         Row(Modifier.fillMaxSize().padding(pad)) {
-            if (landscape && screen == "tabs" && rootOk == true) {
-                SideRail(tab = currentTab, onTab = goTab)
-            }
             AnimatedContent(
                 targetState = screen,
                 modifier = Modifier.weight(1f),
@@ -548,88 +553,130 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
     }
 }
 
-@Composable
-private fun SideRail(tab: Tab, onTab: (Tab) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    NavigationRail(
-        containerColor = cs.surface,
-        modifier = Modifier.fillMaxHeight()
-    ) {
-        Spacer(Modifier.height(12.dp))
-        NavigationRailItem(
-            selected = tab == Tab.Home,
-            onClick = { onTab(Tab.Home) },
-            icon = { Icon(Icons.Filled.Home, contentDescription = stringResource(R.string.tab_home)) },
-            label = { Text(stringResource(R.string.tab_home)) }
-        )
-        NavigationRailItem(
-            selected = tab == Tab.Log,
-            onClick = { onTab(Tab.Log) },
-            icon = { Icon(Icons.Filled.Notes, contentDescription = stringResource(R.string.tab_log)) },
-            label = { Text(stringResource(R.string.tab_log)) }
-        )
-        NavigationRailItem(
-            selected = tab == Tab.About,
-            onClick = { onTab(Tab.About) },
-            icon = { Icon(Icons.Filled.Info, contentDescription = stringResource(R.string.tab_about)) },
-            label = { Text(stringResource(R.string.tab_about_short)) }
-        )
-    }
-}
+private val PillLime = Color(0xFFC6F24A)
+private val PillInner = Color(0xFFEAF88E)
+private val PillInk = Color(0xFF24350C)
+private val pillSpring = spring<Float>(
+    dampingRatio = 0.82f,
+    stiffness = 380f
+)
 
 @Composable
-private fun BottomNav(tab: Tab, onTab: (Tab) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Box(
-        Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            Modifier
-                .clip(CircleShape)
-                .background(cs.surfaceContainerHigh)
-                .padding(6.dp)
-                .animateContentSize(sizeSpring),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            NavChip(stringResource(R.string.tab_home), Icons.Filled.Home, tab == Tab.Home) { onTab(Tab.Home) }
-            NavChip(stringResource(R.string.tab_log), Icons.Filled.Notes, tab == Tab.Log) { onTab(Tab.Log) }
-            NavChip(stringResource(R.string.tab_about), Icons.Filled.Info, tab == Tab.About) { onTab(Tab.About) }
+private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
+    val labels = listOf(
+        stringResource(R.string.tab_home),
+        stringResource(R.string.tab_log),
+        stringResource(R.string.tab_about)
+    )
+    val icons = listOf(Icons.Filled.Home, Icons.Filled.Notes, Icons.Filled.Info)
+    val tabs = Tab.entries
+    val pos = remember { mutableStateListOf(0f, 0f, 0f) }
+    val widths = remember { mutableStateListOf(0f, 0f, 0f) }
+    val thumbX = remember { Animatable(0f) }
+    val thumbW = remember { Animatable(0f) }
+    val progress = pagerState.currentPage + pagerState.currentPageOffsetFraction
+    val selected = progress.roundToInt().coerceIn(0, 2)
+    val moving = kotlin.math.abs(pagerState.currentPageOffsetFraction) > 0.01f
+
+    LaunchedEffect(progress, pos.toList(), widths.toList()) {
+        if (widths.all { it <= 1f }) return@LaunchedEffect
+        val i = progress.toInt().coerceIn(0, 1)
+        val t = (progress - i).coerceIn(0f, 1f)
+        val j = (i + 1).coerceAtMost(2)
+        val x = pos[i] + (pos[j] - pos[i]) * t
+        val w = widths[i] + (widths[j] - widths[i]) * t
+        if (w <= 1f) return@LaunchedEffect
+        if (moving) {
+            thumbX.snapTo(x)
+            thumbW.snapTo(w)
+        } else {
+            thumbX.animateTo(x, pillSpring)
+            thumbW.animateTo(w, pillSpring)
         }
     }
-}
 
-@Composable
-private fun NavChip(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val bg by animateColorAsState(
-        if (selected) cs.secondaryContainer else cs.surfaceContainerHigh,
-        animationSpec = colorTween,
-        label = "navBg"
-    )
-    val fg by animateColorAsState(
-        if (selected) cs.onSecondaryContainer else cs.onSurfaceVariant,
-        animationSpec = colorTween,
-        label = "navFg"
-    )
-    Row(
+    Box(
         Modifier
-            .clip(CircleShape)
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 10.dp)
-            .animateContentSize(sizeSpring),
-        verticalAlignment = Alignment.CenterVertically
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 20.dp, end = 20.dp, bottom = 14.dp, top = 6.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Icon(icon, null, tint = fg, modifier = Modifier.size(20.dp))
-        AnimatedVisibility(selected) {
-            Row {
-                Spacer(Modifier.width(8.dp))
-                Text(label, color = fg, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Box(
+            Modifier
+                .height(68.dp)
+                .clip(CircleShape)
+                .background(PillLime)
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+        ) {
+            Box(Modifier.height(52.dp), contentAlignment = Alignment.CenterStart) {
+                val density = LocalDensity.current
+                Box(
+                    Modifier
+                        .offset { IntOffset(thumbX.value.roundToInt(), 0) }
+                        .width(with(density) { thumbW.value.toDp() })
+                        .fillMaxHeight()
+                        .clip(CircleShape)
+                        .background(PillInner)
+                )
+                Row(
+                    Modifier.fillMaxHeight(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tabs.forEachIndexed { i, tab ->
+                        val on = selected == i
+                        Row(
+                            Modifier
+                                .onGloballyPositioned { c ->
+                                    val x = c.positionInParent().x
+                                    val w = c.size.width.toFloat()
+                                    if (pos[i] != x) pos[i] = x
+                                    if (widths[i] != w) widths[i] = w
+                                }
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { onTab(tab) }
+                                .padding(horizontal = 18.dp)
+                                .fillMaxHeight(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                icons[i],
+                                contentDescription = labels[i],
+                                tint = PillInk,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            AnimatedVisibility(
+                                visible = on,
+                                enter = fadeIn(tween(220)) + expandHorizontally(animationSpec = pillSizeSpring),
+                                exit = fadeOut(tween(160)) + shrinkHorizontally(animationSpec = pillSizeSpring)
+                            ) {
+                                Row {
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        labels[i],
+                                        color = PillInk,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 16.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Clip
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+private val pillSizeSpring = spring<IntSize>(
+    dampingRatio = 0.82f,
+    stiffness = 380f
+)
 
 @Composable
 private fun NoRoot() {
