@@ -107,26 +107,24 @@ function syncEmpty() {
 }
 
 function addRow(src, dest, enabled, status) {
+  src = slash(src || "");
+  dest = slash(dest || "");
+  var name = baseName(dest) || baseName(src) || "vínculo";
   var row = document.createElement("div");
   row.className = "row";
+  row.setAttribute("data-src", src);
+  row.setAttribute("data-dest", dest);
   row.innerHTML =
-    '<input type="text" class="src" placeholder="Origen" value="' + escapeHtml(src || "") + '">' +
-    '<input type="text" class="dest" placeholder="Destino" value="' + escapeHtml(dest || "") + '">' +
-    '<div class="row-meta">' +
-      '<label><input type="checkbox" class="enabled"' + (enabled === false ? "" : " checked") + "> Habilitado</label>" +
+    '<div class="row-ico">📁</div>' +
+    '<div class="row-body">' +
+      '<div class="row-title">' + escapeHtml(name) + "</div>" +
+      '<div class="row-src">' + escapeHtml(src || "sin origen") + "</div>" +
+      '<div class="row-dest">→ ' + escapeHtml(dest || "sin destino") + "</div>" +
       '<span class="status-tag ' + (status || "") + '">' + statusLabel(status) + "</span>" +
-      '<button type="button" class="iconbtn">x</button>' +
-    "</div>";
+    "</div>" +
+    '<button type="button" class="iconbtn" aria-label="Eliminar">✕</button>';
   row.querySelector(".iconbtn").onclick = function () {
-    var src = row.querySelector(".src").value.trim();
-    var dest = row.querySelector(".dest").value.trim();
-    var name = baseName(dest) || baseName(src) || "este vínculo";
-    if (!confirm("¿Eliminar «" + name + "» de forma permanente?\nSe desmonta si está montado.")) return;
-    toast("Eliminando...");
-    sh(WEBCTL + " remove " + JSON.stringify(slash(src)) + " " + JSON.stringify(slash(dest)))
-      .then(refreshAll)
-      .then(function () { toast("Vínculo eliminado"); })
-      .catch(function (err) { toast(err.message || String(err)); });
+    askDelete(row, name, dest);
   };
   rowsEl.appendChild(row);
   syncEmpty();
@@ -136,12 +134,44 @@ function collectConfigText() {
   var lines = ["# Formato: ORIGEN|DESTINO|HABILITADO(1/0)"];
   var list = rowsEl.querySelectorAll(".row");
   for (var i = 0; i < list.length; i++) {
-    var src = list[i].querySelector(".src").value.trim();
-    var dest = list[i].querySelector(".dest").value.trim();
-    var enabled = list[i].querySelector(".enabled").checked ? "1" : "0";
-    if (src && dest && !isUnsafeDest(dest)) lines.push(slash(src) + "|" + slash(dest) + "|" + enabled);
+    var src = list[i].getAttribute("data-src") || "";
+    var dest = list[i].getAttribute("data-dest") || "";
+    if (src && dest && !isUnsafeDest(dest)) lines.push(slash(src) + "|" + slash(dest) + "|1");
   }
   return lines.join("\n") + "\n";
+}
+
+function persistConf() {
+  var b64 = btoa(unescape(encodeURIComponent(collectConfigText())));
+  return sh("echo '" + b64 + "' | base64 -d > " + MODDIR + "/mounts.conf");
+}
+
+function askDelete(row, name, dest) {
+  var overlay = document.getElementById("confirm");
+  var text = document.getElementById("confirmText");
+  if (!overlay || !text) return;
+  text.textContent = "Se borra «" + name + "» de forma permanente y se desmonta si está montado.";
+  overlay.classList.remove("hidden");
+  function close() {
+    overlay.classList.add("hidden");
+  }
+  document.getElementById("confirmNo").onclick = close;
+  document.getElementById("confirmYes").onclick = function () {
+    close();
+    if (row.parentNode) row.parentNode.removeChild(row);
+    syncEmpty();
+    toast("Eliminando...");
+    var destBare = String(dest || "").replace(/\/+$/, "");
+    persistConf()
+      .then(function () {
+        if (!destBare) return;
+        return sh("nsenter -t 1 -m -- umount -l " + JSON.stringify(destBare) + " || true");
+      })
+      .then(refreshAll)
+      .then(function () { toast("Vínculo eliminado"); })
+      .catch(function (err) { toast(err.message || String(err)); });
+  };
+  overlay.onclick = function (e) { if (e.target === overlay) close(); };
 }
 
 function loadStatus() {
