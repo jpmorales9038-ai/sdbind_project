@@ -108,25 +108,27 @@ object RootOps {
         return exec("sh $WEBCTL detect").filter { it.isNotBlank() }.map { normalizeDir(it) }
     }
 
-    suspend fun saveAndApply(entries: List<MountEntry>): Boolean {
-        val body = buildString {
-            appendLine("# Formato: ORIGEN|DESTINO|HABILITADO(1/0)")
-            entries.forEach {
-                if (it.source.isBlank() || it.dest.isBlank()) return@forEach
-                if (isUnsafeDest(it.dest)) return@forEach
-                append(normalizeDir(it.source)).append("|")
-                append(normalizeDir(it.dest)).append("|")
-                append(if (it.enabled) "1" else "0").appendLine()
-            }
+    private fun confBody(entries: List<MountEntry>): String = buildString {
+        appendLine("# Formato: ORIGEN|DESTINO|HABILITADO(1/0)")
+        entries.forEach {
+            if (it.source.isBlank() || it.dest.isBlank()) return@forEach
+            if (isUnsafeDest(it.dest)) return@forEach
+            append(normalizeDir(it.source)).append("|")
+            append(normalizeDir(it.dest)).append("|")
+            append(if (it.enabled) "1" else "0").appendLine()
         }
-        val cmd = buildString {
-            append("cat > ").append(CONF).append(" << 'SDBIND_EOF'\n")
-            append(body)
-            if (!body.endsWith("\n")) append('\n')
-            append("SDBIND_EOF\n")
-            append("sh ").append(WEBCTL).append(" apply")
-        }
+    }
+
+    private suspend fun writeConf(entries: List<MountEntry>): Boolean {
+        val body = confBody(entries)
+        val cmd = "cat > $CONF << 'SDBIND_EOF'\n$body\nSDBIND_EOF"
         val result = withContext(Dispatchers.IO) { Shell.cmd(cmd).exec() }
+        return result.isSuccess
+    }
+
+    suspend fun saveAndApply(entries: List<MountEntry>): Boolean {
+        if (!writeConf(entries)) return false
+        val result = withContext(Dispatchers.IO) { Shell.cmd("sh $WEBCTL apply").exec() }
         return result.isSuccess
     }
 
@@ -135,10 +137,15 @@ object RootOps {
         return result.isSuccess
     }
 
-    suspend fun removeMount(source: String, dest: String): Boolean {
-        val cmd = "sh $WEBCTL remove ${shQuote(normalizeDir(source))} ${shQuote(normalizeDir(dest))}"
-        val result = withContext(Dispatchers.IO) { Shell.cmd(cmd).exec() }
-        return result.isSuccess
+    suspend fun removeMount(source: String, dest: String): Boolean = withContext(Dispatchers.IO) {
+        val src = normalizeDir(source)
+        val dst = normalizeDir(dest)
+        Shell.cmd("nsenter -t 1 -m -- umount -l ${shQuote(dst.trimEnd('/'))} 2>/dev/null; true").exec()
+        val remaining = loadMounts().filterNot {
+            normalizeDir(it.source).trimEnd('/') == src.trimEnd('/') &&
+                normalizeDir(it.dest).trimEnd('/') == dst.trimEnd('/')
+        }
+        writeConf(remaining)
     }
 
     suspend fun tailLog(): String {

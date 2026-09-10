@@ -373,9 +373,6 @@ fun BindApp() {
                     landscape = landscape,
                     playToken = storageGen,
                     onRefreshStorage = { refresh(true) },
-                    onToggle = { i, on ->
-                        entries = entries.toMutableList().also { it[i] = it[i].copy(enabled = on) }
-                    },
                     onDelete = { i -> pendingDelete = entries.getOrNull(i) },
                     onApply = {
                         scope.launch {
@@ -412,6 +409,11 @@ fun BindApp() {
                         pendingDelete = null
                         scope.launch {
                             busy = true
+                            val remaining = entries.filterNot {
+                                it.source.trimEnd('/') == entry.source.trimEnd('/') &&
+                                    it.dest.trimEnd('/') == entry.dest.trimEnd('/')
+                            }
+                            entries = remaining
                             val ok = RootOps.removeMount(entry.source, entry.dest)
                             snack = if (ok) "Vínculo eliminado" else "No se pudo eliminar"
                             refresh()
@@ -608,7 +610,6 @@ private fun HomePane(
     landscape: Boolean,
     playToken: Int,
     onRefreshStorage: () -> Unit,
-    onToggle: (Int, Boolean) -> Unit,
     onDelete: (Int) -> Unit,
     onApply: () -> Unit,
     onUnmount: () -> Unit
@@ -628,7 +629,7 @@ private fun HomePane(
             Column(
                 Modifier.weight(0.58f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 8.dp)
             ) {
-                BindList(entries, onToggle, onDelete)
+                BindList(entries, onDelete)
                 Spacer(Modifier.height(80.dp))
             }
         }
@@ -641,7 +642,7 @@ private fun HomePane(
             Spacer(Modifier.height(20.dp))
             StorageHero(volumes, playToken, onRefreshStorage)
             Spacer(Modifier.height(28.dp))
-            BindList(entries, onToggle, onDelete)
+            BindList(entries, onDelete)
             Spacer(Modifier.height(16.dp))
             ActionButtons(busy, entries.isNotEmpty(), onApply, onUnmount)
             Spacer(Modifier.height(96.dp))
@@ -665,7 +666,6 @@ private fun HomeHeader() {
 @Composable
 private fun BindList(
     entries: List<MountEntry>,
-    onToggle: (Int, Boolean) -> Unit,
     onDelete: (Int) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -685,7 +685,7 @@ private fun BindList(
         }
     } else {
         entries.forEachIndexed { i, e ->
-            BindCard(e, onToggle = { onToggle(i, it) }, onDelete = { onDelete(i) })
+            BindCard(e, onDelete = { onDelete(i) })
             Spacer(Modifier.height(10.dp))
         }
     }
@@ -813,7 +813,7 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
 }
 
 @Composable
-private fun BindCard(entry: MountEntry, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
+private fun BindCard(entry: MountEntry, onDelete: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val name = dirBaseName(entry.dest).ifBlank { dirBaseName(entry.source).ifBlank { "vínculo" } }
     Row(
@@ -839,11 +839,8 @@ private fun BindCard(entry: MountEntry, onToggle: (Boolean) -> Unit, onDelete: (
             Spacer(Modifier.height(4.dp))
             StatusChip(entry.status)
         }
-        Column(horizontalAlignment = Alignment.End) {
-            Switch(checked = entry.enabled, onCheckedChange = onToggle)
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Close, null, tint = cs.error, modifier = Modifier.size(18.dp))
-            }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Filled.Close, null, tint = cs.error, modifier = Modifier.size(18.dp))
         }
     }
 }
