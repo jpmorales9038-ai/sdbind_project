@@ -75,9 +75,6 @@ case "$1" in
 
     storage)
         dump_storage
-        if [ -f "$MODDIR/storage.cache" ]; then
-            grep '^EXTERNAL|' "$MODDIR/storage.cache" 2>/dev/null
-        fi
         ;;
 
     theme)

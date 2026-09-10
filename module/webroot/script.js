@@ -200,7 +200,7 @@ var lastVolKey = "";
 function volKeyFromStdout(s) {
   return String(s).split("\n").map(function (l) {
     var p = l.trim().split("|");
-    return p.length >= 2 ? p[0] + ":" + p[1] : "";
+    return p.length >= 2 ? p[0] + ":" + baseName(p[1]) : "";
   }).filter(Boolean).join("|");
 }
 
@@ -284,25 +284,29 @@ function parseDfText(text, internals, externals, seen) {
   });
 }
 
-function loadStorage() {
+function loadStorage(forceAnim) {
   return Promise.all([
     sh(WEBCTL + " storage").catch(function () { return { stdout: "" }; }),
-    sh("cat " + MODDIR + "/storage.cache 2>/dev/null").catch(function () { return { stdout: "" }; }),
     sh("nsenter -t 1 -m -- df -Ph 2>/dev/null || nsenter --mount=/proc/1/ns/mnt -- df -Ph 2>/dev/null || df -Ph 2>/dev/null").catch(function () { return { stdout: "" }; })
   ]).then(function (rs) {
     var internals = [];
     var externals = [];
     var seen = {};
     parseKindLines(rs[0] && rs[0].stdout, internals, externals, seen);
-    parseKindLines(rs[1] && rs[1].stdout, internals, externals, seen);
-    parseDfText(rs[2] && rs[2].stdout, internals, externals, seen);
-    paintStorageLists(internals, externals);
+    parseDfText(rs[1] && rs[1].stdout, internals, externals, seen);
+    paintStorageLists(internals, externals, forceAnim);
   });
 }
 
-function paintStorageLists(internals, externals) {
+function paintStorageLists(internals, externals, forceAnim) {
     var box = document.getElementById("rings");
     if (!box) return;
+    var key = internals.concat(externals).map(function (v) { return v.kind + ":" + baseName(v.path); }).join("|");
+    if (!forceAnim && key === lastVolKey && box.children.length) {
+      lastVolKey = key;
+      return;
+    }
+    lastVolKey = key;
     box.innerHTML = "";
     function add(vol, secondary, label) {
       var cell = makeCell(secondary);
@@ -314,7 +318,6 @@ function paintStorageLists(internals, externals) {
       var id = baseName(externals[b].path);
       add(externals[b], true, id ? "SD " + id : "SD / OTG");
     }
-    lastVolKey = internals.concat(externals).map(function (v) { return v.kind + ":" + baseName(v.path); }).join("|");
 }
 
 function refreshAll() {
@@ -586,14 +589,7 @@ function startVolumeWatch() {
   if (startVolumeWatch._id) return;
   startVolumeWatch._id = setInterval(function () {
     if (!hasBridge()) return;
-    sh(WEBCTL + " storage").then(function (res) {
-      var key = volKeyFromStdout(res.stdout);
-      if (lastVolKey && key !== lastVolKey) {
-        loadStorage();
-      } else if (!lastVolKey) {
-        lastVolKey = key;
-      }
-    }).catch(function () {});
+    loadStorage(false);
   }, 2000);
 }
 
@@ -605,7 +601,7 @@ function startVolumeWatch() {
     clearTimeout(timer);
     timer = setTimeout(function () {
       toast("Actualizando almacenamiento...");
-      loadStorage().catch(function (err) { toast(err.message || String(err)); });
+      loadStorage(true).catch(function (err) { toast(err.message || String(err)); });
     }, 500);
   }
   function cancel() { clearTimeout(timer); }
@@ -618,7 +614,7 @@ function startVolumeWatch() {
   card.addEventListener("contextmenu", function (e) {
     e.preventDefault();
     toast("Actualizando almacenamiento...");
-    loadStorage();
+    loadStorage(true);
   });
 })();
 

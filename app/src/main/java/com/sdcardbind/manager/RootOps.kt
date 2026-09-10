@@ -164,14 +164,6 @@ object RootOps {
         val externals = (fromCtl.filter { it.kind == VolumeKind.EXTERNAL } +
             fromDf.filter { it.kind == VolumeKind.EXTERNAL }).distinctBy { volId(it.path) }
         val merged = internals.take(1) + externals
-        if (merged.isNotEmpty()) {
-            val body = merged.joinToString("\n") {
-                "${it.kind.name}|${it.path}|${it.totalHuman}|${it.usedHuman}|${it.availHuman}|${it.usePercent}"
-            }
-            withContext(Dispatchers.IO) {
-                Shell.cmd("cat > $MODDIR/storage.cache << 'SDBIND_ST'\n$body\nSDBIND_ST").exec()
-            }
-        }
         return merged
     }
 
