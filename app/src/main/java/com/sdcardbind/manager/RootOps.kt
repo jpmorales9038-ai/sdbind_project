@@ -158,7 +158,8 @@ object RootOps {
             val mp = cols[5]
             val kind = when {
                 mp == "/data" || mp == "/data/media" || mp.startsWith("/storage/emulated") -> VolumeKind.INTERNAL
-                mp.startsWith("/mnt/media_rw/") -> VolumeKind.EXTERNAL
+                mp.startsWith("/mnt/media_rw/") || mp.startsWith("/mnt/expand/") -> VolumeKind.EXTERNAL
+                mp.startsWith("/storage/") && !mp.contains("emulated") && !mp.endsWith("/self") -> VolumeKind.EXTERNAL
                 else -> continue
             }
             result.add(
@@ -172,6 +173,6 @@ object RootOps {
                 )
             )
         }
-        return result.distinctBy { it.kind to it.path }
+        return result.distinctBy { it.kind to it.path.trimEnd('/').substringAfterLast('/') }
     }
 }

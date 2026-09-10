@@ -179,26 +179,29 @@ dump_storage() {
         echo "INTERNAL|/storage/emulated/0|$stats"
     fi
 
-    found=
-    for d in /mnt/media_rw/*; do
+    seen="|"
+    for d in /mnt/media_rw/* /mnt/expand/*; do
         [ -d "$d" ] || continue
+        id=$(basename "$d")
+        case "$seen" in *"|$id|"*) continue ;; esac
         stats=$(df_stats "$d") || continue
         echo "EXTERNAL|$d|$stats"
-        found=1
+        seen="${seen}${id}|"
     done
-    if [ -z "$found" ]; then
-        for d in /storage/*; do
-            [ -d "$d" ] || continue
-            case "$d" in
-                */emulated|*/self|*/sdcard) continue ;;
-            esac
-            REAL=$(readlink -f "$d" 2>/dev/null)
-            case "$REAL" in
-                /data/media*) continue ;;
-            esac
-            stats=$(df_stats "$d") || continue
-            echo "EXTERNAL|$d|$stats"
-        done
-    fi
+    for d in /storage/*; do
+        [ -d "$d" ] || continue
+        case "$d" in
+            */emulated|*/self|*/sdcard) continue ;;
+        esac
+        REAL=$(readlink -f "$d" 2>/dev/null)
+        case "$REAL" in
+            /data/media*) continue ;;
+        esac
+        id=$(basename "$d")
+        case "$seen" in *"|$id|"*) continue ;; esac
+        stats=$(df_stats "$d") || continue
+        echo "EXTERNAL|$d|$stats"
+        seen="${seen}${id}|"
+    done
 }
 

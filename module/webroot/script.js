@@ -155,16 +155,37 @@ function refreshLog() {
   });
 }
 
+function makeCell(secondary) {
+  var cell = document.createElement("div");
+  cell.className = "cell";
+  var cls = secondary ? "ring secondary" : "ring";
+  cell.innerHTML =
+    '<svg class="' + cls + '" viewBox="0 0 100 100" aria-hidden="true">' +
+      '<circle class="track" cx="50" cy="50" r="38" pathLength="100" />' +
+      '<circle class="arc" cx="50" cy="50" r="38" pathLength="100" />' +
+      '<text x="50" y="55" text-anchor="middle">-</text>' +
+    "</svg>" +
+    '<div class="cell-label"></div>' +
+    '<div class="cell-free"></div>' +
+    '<div class="cell-used"></div>';
+  return cell;
+}
+
 function setRing(cell, pct, free, used, total, label) {
   if (!cell) return;
   var arc = cell.querySelector(".arc");
   var text = cell.querySelector("text");
   var p = Math.max(0, Math.min(100, pct || 0));
   if (arc) {
-    arc.style.strokeDasharray = p + " 100";
-    arc.style.strokeDashoffset = "0";
+    arc.style.transition = "none";
+    arc.style.strokeDasharray = "0 100";
+    void arc.getBoundingClientRect();
+    requestAnimationFrame(function () {
+      arc.style.transition = "stroke-dasharray .7s ease";
+      arc.style.strokeDasharray = p + " 100";
+    });
   }
-  if (text) text.textContent = p ? p + "%" : "-";
+  if (text) text.textContent = p + "%";
   var lab = cell.querySelector(".cell-label");
   var fr = cell.querySelector(".cell-free");
   var us = cell.querySelector(".cell-used");
@@ -175,21 +196,43 @@ function setRing(cell, pct, free, used, total, label) {
 
 function loadStorage() {
   return sh(WEBCTL + " storage").then(function (res) {
-    var internal = null, external = null;
+    var box = document.getElementById("rings");
+    if (!box) return;
+    box.innerHTML = "";
+    var internals = [];
+    var externals = [];
     var lines = String(res.stdout).split("\n");
     for (var i = 0; i < lines.length; i++) {
       var p = lines[i].trim().split("|");
       if (p.length < 6) continue;
       var vol = { kind: p[0], path: p[1], total: p[2], used: p[3], avail: p[4], pct: parseInt(p[5], 10) || 0 };
-      if (vol.kind === "INTERNAL" && !internal) internal = vol;
-      if (vol.kind === "EXTERNAL" && !external) external = vol;
+      if (vol.kind === "INTERNAL") internals.push(vol);
+      else if (vol.kind === "EXTERNAL") externals.push(vol);
     }
-    if (internal) {
-      setRing(document.getElementById("cellInternal"), internal.pct, internal.avail + " libres", internal.used, internal.total, "Interno");
+    function add(vol, secondary, label, empty) {
+      var cell = makeCell(secondary);
+      box.appendChild(cell);
+      if (empty) {
+        setRing(cell, 0, "Sin unidad", "", "", label);
+        var t = cell.querySelector("text");
+        if (t) t.textContent = "-";
+      } else {
+        setRing(cell, vol.pct, vol.avail + " libres", vol.used, vol.total, label);
+      }
     }
-    if (external) {
-      var id = baseName(external.path);
-      setRing(document.getElementById("cellExternal"), external.pct, external.avail + " libres", external.used, external.total, id ? "SD " + id : "SD / OTG");
+    if (!internals.length && !externals.length) {
+      add(null, false, "Interno", true);
+      add(null, true, "SD / OTG", true);
+      return;
+    }
+    for (var a = 0; a < internals.length; a++) add(internals[a], false, "Interno", false);
+    if (!externals.length) {
+      add(null, true, "SD / OTG", true);
+    } else {
+      for (var b = 0; b < externals.length; b++) {
+        var id = baseName(externals[b].path);
+        add(externals[b], true, id ? "SD " + id : "SD / OTG", false);
+      }
     }
   });
 }
@@ -337,6 +380,31 @@ function boot(found) {
     syncEmpty();
   }
 }
+
+(function bindStoragePress() {
+  var card = document.getElementById("storageCard");
+  if (!card) return;
+  var timer = 0;
+  function start() {
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      toast("Actualizando almacenamiento...");
+      loadStorage().catch(function (err) { toast(err.message || String(err)); });
+    }, 500);
+  }
+  function cancel() { clearTimeout(timer); }
+  card.addEventListener("touchstart", start, { passive: true });
+  card.addEventListener("touchend", cancel);
+  card.addEventListener("touchmove", cancel);
+  card.addEventListener("mousedown", start);
+  card.addEventListener("mouseup", cancel);
+  card.addEventListener("mouseleave", cancel);
+  card.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+    toast("Actualizando almacenamiento...");
+    loadStorage();
+  });
+})();
 
 (function waitBridge() {
   var n = 0;

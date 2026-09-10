@@ -15,30 +15,9 @@
 
     <div class="layout">
       <section class="pane-storage">
-        <div class="card">
+        <div class="card" id="storageCard">
           <p class="kicker">Almacenamiento</p>
-          <div class="rings">
-            <div class="cell" id="cellInternal">
-              <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
-                <circle class="track" cx="50" cy="50" r="38" pathLength="100" />
-                <circle class="arc" cx="50" cy="50" r="38" pathLength="100" />
-                <text x="50" y="55" text-anchor="middle">—</text>
-              </svg>
-              <div class="cell-label">Interno</div>
-              <div class="cell-free">—</div>
-              <div class="cell-used">—</div>
-            </div>
-            <div class="cell" id="cellExternal">
-              <svg class="ring secondary" viewBox="0 0 100 100" aria-hidden="true">
-                <circle class="track" cx="50" cy="50" r="38" pathLength="100" />
-                <circle class="arc" cx="50" cy="50" r="38" pathLength="100" />
-                <text x="50" y="55" text-anchor="middle">—</text>
-              </svg>
-              <div class="cell-label">SD / OTG</div>
-              <div class="cell-free">Sin unidad</div>
-              <div class="cell-used"></div>
-            </div>
-          </div>
+          <div class="rings" id="rings"></div>
         </div>
         <div class="actions">
           <button id="saveApplyBtn" class="btn primary">Guardar y montar</button>

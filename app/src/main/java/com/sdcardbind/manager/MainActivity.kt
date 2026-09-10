@@ -11,6 +11,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -27,6 +28,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,6 +46,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
@@ -112,6 +115,7 @@ fun BindApp() {
     var rootOk by remember { mutableStateOf<Boolean?>(null) }
     var entries by remember { mutableStateOf(listOf<MountEntry>()) }
     var volumes by remember { mutableStateOf(listOf<StorageVolume>()) }
+    var storageGen by remember { mutableIntStateOf(0) }
     var log by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var tab by remember { mutableStateOf(Tab.Home) }
@@ -119,11 +123,13 @@ fun BindApp() {
     var pendingSource by remember { mutableStateOf("") }
     var snack by remember { mutableStateOf<String?>(null) }
 
-    fun refresh() {
+    fun refresh(showSnack: Boolean = false) {
         scope.launch {
             entries = RootOps.loadMounts()
             volumes = RootOps.storageVolumes()
             log = RootOps.tailLog()
+            storageGen++
+            if (showSnack) snack = "Almacenamiento actualizado"
         }
     }
 
@@ -244,6 +250,8 @@ fun BindApp() {
                     entries = entries,
                     busy = busy,
                     landscape = landscape,
+                    playToken = storageGen,
+                    onRefreshStorage = { refresh(true) },
                     onToggle = { i, on ->
                         entries = entries.toMutableList().also { it[i] = it[i].copy(enabled = on) }
                     },
@@ -368,6 +376,8 @@ private fun HomePane(
     entries: List<MountEntry>,
     busy: Boolean,
     landscape: Boolean,
+    playToken: Int,
+    onRefreshStorage: () -> Unit,
     onToggle: (Int, Boolean) -> Unit,
     onDelete: (Int) -> Unit,
     onApply: () -> Unit,
@@ -380,7 +390,7 @@ private fun HomePane(
             ) {
                 HomeHeader()
                 Spacer(Modifier.height(16.dp))
-                StorageHero(volumes)
+                StorageHero(volumes, playToken, onRefreshStorage)
                 Spacer(Modifier.height(16.dp))
                 ActionButtons(busy, entries.isNotEmpty(), onApply, onUnmount)
                 Spacer(Modifier.height(24.dp))
@@ -399,7 +409,7 @@ private fun HomePane(
             Spacer(Modifier.height(12.dp))
             HomeHeader()
             Spacer(Modifier.height(20.dp))
-            StorageHero(volumes)
+            StorageHero(volumes, playToken, onRefreshStorage)
             Spacer(Modifier.height(28.dp))
             BindList(entries, onToggle, onDelete)
             Spacer(Modifier.height(16.dp))
@@ -467,36 +477,39 @@ private fun ActionButtons(busy: Boolean, hasEntries: Boolean, onApply: () -> Uni
 }
 
 @Composable
-private fun StorageHero(volumes: List<StorageVolume>) {
+private fun StorageHero(volumes: List<StorageVolume>, playToken: Int, onRefresh: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val internal = volumes.firstOrNull { it.kind == VolumeKind.INTERNAL }
+    val internal = volumes.filter { it.kind == VolumeKind.INTERNAL }
     val externals = volumes.filter { it.kind == VolumeKind.EXTERNAL }
     Column(
         Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.extraLarge)
             .background(cs.surfaceContainer)
+            .pointerInput(Unit) { detectTapGestures(onLongPress = { onRefresh() }) }
             .padding(20.dp)
             .animateContentSize(sizeSpring)
     ) {
         Text("Almacenamiento", color = cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(16.dp))
-        if (internal == null && externals.isEmpty()) {
-            Text("Sin datos todavía", color = cs.onSurfaceVariant)
+        if (internal.isEmpty() && externals.isEmpty()) {
+            Text("Mantené pulsado para actualizar", color = cs.onSurfaceVariant)
         } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (internal != null) {
-                    StorageCell(internal, Modifier.weight(1f), secondary = false)
-                }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                internal.forEach { StorageCell(it, Modifier.widthIn(min = 108.dp), secondary = false, playToken = playToken) }
                 if (externals.isEmpty()) {
                     StorageCell(
                         StorageVolume(VolumeKind.EXTERNAL, "", "—", "—", "—", 0),
-                        Modifier.weight(1f),
+                        Modifier.widthIn(min = 108.dp),
                         secondary = true,
-                        empty = true
+                        empty = true,
+                        playToken = playToken
                     )
                 } else {
-                    externals.take(1).forEach { StorageCell(it, Modifier.weight(1f), secondary = true) }
+                    externals.forEach { StorageCell(it, Modifier.widthIn(min = 108.dp), secondary = true, playToken = playToken) }
                 }
             }
         }
@@ -508,11 +521,12 @@ private fun StorageCell(
     vol: StorageVolume,
     modifier: Modifier = Modifier,
     secondary: Boolean,
-    empty: Boolean = false
+    empty: Boolean = false,
+    playToken: Int = 0
 ) {
     val cs = MaterialTheme.colorScheme
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        StorageRing(if (empty) 0 else vol.usePercent, Modifier.size(88.dp), secondary = secondary)
+        StorageRing(if (empty) 0 else vol.usePercent, Modifier.size(88.dp), secondary = secondary, playToken = playToken)
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -522,7 +536,7 @@ private fun StorageCell(
                 modifier = Modifier.size(14.dp)
             )
             Spacer(Modifier.width(4.dp))
-            Text(if (empty) "SD / OTG" else vol.label, color = cs.onSurfaceVariant, fontSize = 12.sp)
+            Text(if (empty) "SD / OTG" else vol.label, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (empty) {
             Text("Sin unidad", color = cs.onSurfaceVariant, fontSize = 13.sp)
@@ -534,10 +548,19 @@ private fun StorageCell(
 }
 
 @Composable
-private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: Boolean = false) {
+private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: Boolean = false, playToken: Int = 0) {
     val cs = MaterialTheme.colorScheme
-    val p = percent.coerceIn(0, 100) / 100f
-    val animated by animateFloatAsState(p, animationSpec = floatSpring, label = "ring")
+    var target by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(percent, playToken) {
+        target = 0f
+        kotlinx.coroutines.delay(16)
+        target = percent.coerceIn(0, 100) / 100f
+    }
+    val animated by animateFloatAsState(
+        target,
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "ring"
+    )
     val track = if (secondary) cs.secondaryContainer else cs.primaryContainer
     val arc = if (secondary) cs.secondary else cs.primary
     Box(modifier, contentAlignment = Alignment.Center) {

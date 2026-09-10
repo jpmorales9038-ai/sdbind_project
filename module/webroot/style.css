@@ -52,11 +52,17 @@ body {
 .layout { display: flex; flex-direction: column; gap: 18px; }
 
 .card, .row { background: var(--surface); border-radius: var(--radius); }
-.card { padding: 20px; }
+.card { padding: 20px; user-select: none; }
 .kicker { margin: 0 0 16px; font-size: 13px; color: var(--muted); font-weight: 500; }
 
-.rings { display: flex; gap: 12px; }
-.cell { flex: 1; text-align: center; min-width: 0; }
+.rings {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+.cell { flex: 0 0 112px; text-align: center; min-width: 112px; user-select: none; }
 .ring { width: 96px; height: 96px; margin: 0 auto; display: block; }
 .ring circle { fill: none; stroke-width: 10; stroke-linecap: round; }
 .ring .track { stroke: var(--surface-2); stroke-dasharray: 100; stroke-dashoffset: 0; }
