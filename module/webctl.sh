@@ -27,7 +27,7 @@ case "$1" in
             else
                 ST="SOURCE_MISSING"
             fi
-            echo "$SRC|$DEST|$ENABLED|$ST"
+            echo "${SRC%/}/|${DEST%/}/|$ENABLED|$ST"
         done < "$CONF"
         ;;
 

@@ -139,6 +139,8 @@ function collectConfigText() {
     var dest = row.querySelector(".dest").value.trim();
     var enabled = row.querySelector(".enabled").checked ? "1" : "0";
     if (src && dest) {
+      if (src.charAt(src.length - 1) !== "/") src += "/";
+      if (dest.charAt(dest.length - 1) !== "/") dest += "/";
       lines.push(src + "|" + dest + "|" + enabled);
     }
   });
@@ -194,8 +196,9 @@ document.getElementById("detectBtn").addEventListener("click", function () {
       var btn = document.createElement("button");
       btn.textContent = "Usar";
       btn.addEventListener("click", function () {
-        var base = p.split("/").pop();
-        addRow(p, "/storage/emulated/0/" + base, true, "");
+        var clean = p.replace(/\/+$/, "");
+        var base = clean.split("/").pop();
+        addRow(clean + "/", "/storage/emulated/0/" + base + "/", true, "");
         toast("Carpeta añadida abajo. Ajusta el destino si quieres.");
       });
       item.appendChild(btn);

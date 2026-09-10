@@ -27,6 +27,15 @@ data class StorageVolume(
 /** Escapa una ruta para insertarla de forma segura dentro de comillas simples de shell. */
 fun shQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
+/** La WebUI escribe rutas con '/' final; el bind mount en Android lo necesita. */
+fun normalizeDir(path: String): String {
+    val p = path.trim()
+    if (p.isEmpty() || p == "/") return p
+    return if (p.endsWith("/")) p else "$p/"
+}
+
+fun dirBaseName(path: String): String = path.trim().trimEnd('/').substringAfterLast('/')
+
 object RootOps {
 
     suspend fun isRootAvailable(): Boolean = withContext(Dispatchers.IO) {
@@ -38,8 +47,9 @@ object RootOps {
     }
 
     suspend fun listSubdirectories(path: String): List<String> {
-        val cmd = "find " + shQuote(path) + " -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort"
-        return exec(cmd).filter { it.isNotBlank() }
+        val cmd = "find " + shQuote(path.trimEnd('/').ifBlank { "/" }) +
+            " -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort"
+        return exec(cmd).filter { it.isNotBlank() }.map { normalizeDir(it) }
     }
 
     suspend fun loadMounts(): List<MountEntry> {
@@ -48,8 +58,8 @@ object RootOps {
             val parts = line.split("|")
             if (parts.size < 4) return@mapNotNull null
             MountEntry(
-                source = parts[0],
-                dest = parts[1],
+                source = normalizeDir(parts[0]),
+                dest = normalizeDir(parts[1]),
                 enabled = parts[2] == "1",
                 status = parts[3]
             )
@@ -57,14 +67,14 @@ object RootOps {
     }
 
     suspend fun detectCandidates(): List<String> {
-        return exec("sh $WEBCTL detect").filter { it.isNotBlank() }
+        return exec("sh $WEBCTL detect").filter { it.isNotBlank() }.map { normalizeDir(it) }
     }
 
     suspend fun saveAndApply(entries: List<MountEntry>): Boolean {
         val sb = StringBuilder("# Formato: ORIGEN|DESTINO|HABILITADO(1/0)\n")
         entries.forEach {
             if (it.source.isNotBlank() && it.dest.isNotBlank()) {
-                sb.append(it.source).append("|").append(it.dest).append("|")
+                sb.append(normalizeDir(it.source)).append("|").append(normalizeDir(it.dest)).append("|")
                     .append(if (it.enabled) "1" else "0").append("\n")
             }
         }

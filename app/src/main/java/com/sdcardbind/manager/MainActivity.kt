@@ -218,8 +218,9 @@ fun MainScreen() {
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                val base = path.substringAfterLast("/")
-                                entries = entries + MountEntry(path, "/storage/emulated/0/$base", true)
+                                val src = normalizeDir(path)
+                                val dest = normalizeDir("/storage/emulated/0/${dirBaseName(path)}")
+                                entries = entries + MountEntry(src, dest, true)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = AccentColor, contentColor = Color.Black)
                         ) { Text("Usar", fontSize = 12.sp) }
@@ -297,10 +298,18 @@ fun MainScreen() {
             startPath = if (isSource) "/mnt/media_rw" else "/storage/emulated/0",
             onDismiss = { browserTarget = null },
             onSelect = { chosen ->
+                val folder = normalizeDir(chosen)
                 entries = entries.toMutableList().also {
                     if (index in it.indices) {
                         val cur = it[index]
-                        it[index] = if (isSource) cur.copy(source = chosen) else cur.copy(dest = chosen)
+                        it[index] = if (isSource) {
+                            val dest = if (cur.dest.isBlank()) {
+                                normalizeDir("/storage/emulated/0/${dirBaseName(chosen)}")
+                            } else cur.dest
+                            cur.copy(source = folder, dest = dest)
+                        } else {
+                            cur.copy(dest = folder)
+                        }
                     }
                 }
                 browserTarget = null
@@ -470,7 +479,7 @@ fun FolderBrowserDialog(
                     OutlinedButton(
                         onClick = { currentPath = shortcut },
                         modifier = Modifier.padding(end = 6.dp)
-                    ) { Text(shortcut.substringAfterLast("/"), fontSize = 11.sp) }
+                    ) { Text(dirBaseName(shortcut).ifBlank { shortcut }, fontSize = 11.sp) }
                 }
             }
 
@@ -478,8 +487,11 @@ fun FolderBrowserDialog(
             Text(currentPath, color = MutedColor, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(8.dp))
 
-            if (currentPath != "/") {
-                TextButton(onClick = { currentPath = currentPath.substringBeforeLast("/").ifBlank { "/" } }) {
+            if (currentPath.trimEnd('/') != "") {
+                TextButton(onClick = {
+                    val parent = currentPath.trimEnd('/').substringBeforeLast("/").ifBlank { "/" }
+                    currentPath = parent
+                }) {
                     Icon(Icons.Filled.ArrowUpward, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Subir un nivel", fontSize = 12.sp)
@@ -506,7 +518,7 @@ fun FolderBrowserDialog(
                                 Icon(Icons.Filled.Folder, contentDescription = null, tint = AccentColor, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    child.substringAfterLast("/"),
+                                    dirBaseName(child),
                                     color = Color.White, fontSize = 13.sp,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis
                                 )
