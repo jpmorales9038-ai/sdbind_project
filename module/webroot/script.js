@@ -155,6 +155,15 @@ function refreshLog() {
   });
 }
 
+var lastVolKey = "";
+
+function volKeyFromStdout(s) {
+  return String(s).split("\n").map(function (l) {
+    var p = l.trim().split("|");
+    return p.length >= 2 ? p[0] + ":" + p[1] : "";
+  }).filter(Boolean).join("|");
+}
+
 function makeCell(secondary) {
   var cell = document.createElement("div");
   cell.className = "cell";
@@ -209,31 +218,17 @@ function loadStorage() {
       if (vol.kind === "INTERNAL") internals.push(vol);
       else if (vol.kind === "EXTERNAL") externals.push(vol);
     }
-    function add(vol, secondary, label, empty) {
+    function add(vol, secondary, label) {
       var cell = makeCell(secondary);
       box.appendChild(cell);
-      if (empty) {
-        setRing(cell, 0, "Sin unidad", "", "", label);
-        var t = cell.querySelector("text");
-        if (t) t.textContent = "-";
-      } else {
-        setRing(cell, vol.pct, vol.avail + " libres", vol.used, vol.total, label);
-      }
+      setRing(cell, vol.pct, vol.avail + " libres", vol.used, vol.total, label);
     }
-    if (!internals.length && !externals.length) {
-      add(null, false, "Interno", true);
-      add(null, true, "SD / OTG", true);
-      return;
+    for (var a = 0; a < internals.length; a++) add(internals[a], false, "Interno");
+    for (var b = 0; b < externals.length; b++) {
+      var id = baseName(externals[b].path);
+      add(externals[b], true, id ? "SD " + id : "SD / OTG");
     }
-    for (var a = 0; a < internals.length; a++) add(internals[a], false, "Interno", false);
-    if (!externals.length) {
-      add(null, true, "SD / OTG", true);
-    } else {
-      for (var b = 0; b < externals.length; b++) {
-        var id = baseName(externals[b].path);
-        add(externals[b], true, id ? "SD " + id : "SD / OTG", false);
-      }
-    }
+    lastVolKey = volKeyFromStdout(res.stdout);
   });
 }
 
@@ -375,10 +370,26 @@ function boot(found) {
   if (found) {
     setBadge("conectado", "ok");
     refreshAll();
+    startVolumeWatch();
   } else {
     setBadge("sin acceso", "bad");
     syncEmpty();
   }
+}
+
+function startVolumeWatch() {
+  if (startVolumeWatch._id) return;
+  startVolumeWatch._id = setInterval(function () {
+    if (!hasBridge()) return;
+    sh(WEBCTL + " storage").then(function (res) {
+      var key = volKeyFromStdout(res.stdout);
+      if (lastVolKey && key !== lastVolKey) {
+        loadStorage();
+      } else if (!lastVolKey) {
+        lastVolKey = key;
+      }
+    }).catch(function () {});
+  }, 2000);
 }
 
 (function bindStoragePress() {

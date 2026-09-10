@@ -1,6 +1,12 @@
 package com.sdcardbind.manager
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
+import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -11,6 +17,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -53,6 +60,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -110,6 +118,7 @@ private val floatSpring = spring<Float>(
 
 @Composable
 fun BindApp() {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val cs = MaterialTheme.colorScheme
     var rootOk by remember { mutableStateOf<Boolean?>(null) }
@@ -123,12 +132,15 @@ fun BindApp() {
     var pendingSource by remember { mutableStateOf("") }
     var snack by remember { mutableStateOf<String?>(null) }
 
-    fun refresh(showSnack: Boolean = false) {
+    fun refresh(showSnack: Boolean = false, forceAnim: Boolean = showSnack) {
         scope.launch {
             entries = RootOps.loadMounts()
-            volumes = RootOps.storageVolumes()
+            val next = RootOps.storageVolumes()
+            val changed = next.joinToString("|") { "${it.kind}:${it.path}" } !=
+                volumes.joinToString("|") { "${it.kind}:${it.path}" }
+            volumes = next
             log = RootOps.tailLog()
-            storageGen++
+            if (forceAnim || changed) storageGen++
             if (showSnack) snack = "Almacenamiento actualizado"
         }
     }
@@ -141,6 +153,55 @@ fun BindApp() {
         if (snack != null) {
             kotlinx.coroutines.delay(2800)
             snack = null
+        }
+    }
+
+    LaunchedEffect(rootOk) {
+        if (rootOk != true) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(2000)
+            val next = RootOps.storageVolumes()
+            val oldKey = volumes.joinToString("|") { "${it.kind}:${it.path}" }
+            val newKey = next.joinToString("|") { "${it.kind}:${it.path}" }
+            val hadExt = volumes.any { it.kind == VolumeKind.EXTERNAL }
+            volumes = next
+            if (oldKey != newKey) {
+                storageGen++
+                val hasExt = next.any { it.kind == VolumeKind.EXTERNAL }
+                if (!hadExt && hasExt) snack = "Unidad detectada"
+                else if (hadExt && !hasExt) snack = "Unidad desconectada"
+            }
+        }
+    }
+
+    DisposableEffect(rootOk) {
+        if (rootOk != true) return@DisposableEffect onDispose { }
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, i: Intent?) { refresh(false) }
+        }
+        val usb = IntentFilter().apply {
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+            addAction("android.os.storage.action.VOLUME_STATE_CHANGED")
+        }
+        val media = IntentFilter().apply {
+            addAction(Intent.ACTION_MEDIA_MOUNTED)
+            addAction(Intent.ACTION_MEDIA_UNMOUNTED)
+            addAction(Intent.ACTION_MEDIA_REMOVED)
+            addAction(Intent.ACTION_MEDIA_BAD_REMOVAL)
+            addDataScheme("file")
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            context.registerReceiver(receiver, usb, Context.RECEIVER_EXPORTED)
+            context.registerReceiver(receiver, media, Context.RECEIVER_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            context.registerReceiver(receiver, usb)
+            @Suppress("DEPRECATION")
+            context.registerReceiver(receiver, media)
+        }
+        onDispose {
+            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
         }
     }
 
@@ -476,11 +537,10 @@ private fun ActionButtons(busy: Boolean, hasEntries: Boolean, onApply: () -> Uni
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StorageHero(volumes: List<StorageVolume>, playToken: Int, onRefresh: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val internal = volumes.filter { it.kind == VolumeKind.INTERNAL }
-    val externals = volumes.filter { it.kind == VolumeKind.EXTERNAL }
     Column(
         Modifier
             .fillMaxWidth()
@@ -492,24 +552,22 @@ private fun StorageHero(volumes: List<StorageVolume>, playToken: Int, onRefresh:
     ) {
         Text("Almacenamiento", color = cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(16.dp))
-        if (internal.isEmpty() && externals.isEmpty()) {
+        if (volumes.isEmpty()) {
             Text("Mantené pulsado para actualizar", color = cs.onSurfaceVariant)
         } else {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                maxItemsInEachRow = 4
             ) {
-                internal.forEach { StorageCell(it, Modifier.widthIn(min = 108.dp), secondary = false, playToken = playToken) }
-                if (externals.isEmpty()) {
+                volumes.forEach { vol ->
                     StorageCell(
-                        StorageVolume(VolumeKind.EXTERNAL, "", "—", "—", "—", 0),
-                        Modifier.widthIn(min = 108.dp),
-                        secondary = true,
-                        empty = true,
+                        vol,
+                        Modifier.width(120.dp),
+                        secondary = vol.kind == VolumeKind.EXTERNAL,
                         playToken = playToken
                     )
-                } else {
-                    externals.forEach { StorageCell(it, Modifier.widthIn(min = 108.dp), secondary = true, playToken = playToken) }
                 }
             }
         }
@@ -550,17 +608,19 @@ private fun StorageCell(
 @Composable
 private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: Boolean = false, playToken: Int = 0) {
     val cs = MaterialTheme.colorScheme
-    var target by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(percent, playToken) {
-        target = 0f
-        kotlinx.coroutines.delay(16)
-        target = percent.coerceIn(0, 100) / 100f
+    val anim = remember { Animatable(0f) }
+    var lastToken by remember { mutableIntStateOf(playToken) }
+    LaunchedEffect(playToken, percent) {
+        val t = percent.coerceIn(0, 100) / 100f
+        if (playToken != lastToken) {
+            lastToken = playToken
+            anim.snapTo(0f)
+            anim.animateTo(t, tween(700, easing = FastOutSlowInEasing))
+        } else {
+            anim.animateTo(t, tween(700, easing = FastOutSlowInEasing))
+        }
     }
-    val animated by animateFloatAsState(
-        target,
-        animationSpec = tween(700, easing = FastOutSlowInEasing),
-        label = "ring"
-    )
+    val animated = anim.value
     val track = if (secondary) cs.secondaryContainer else cs.primaryContainer
     val arc = if (secondary) cs.secondary else cs.primary
     Box(modifier, contentAlignment = Alignment.Center) {

@@ -57,10 +57,10 @@ body {
 
 .rings {
   display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 16px 24px;
 }
 .cell { flex: 0 0 112px; text-align: center; min-width: 112px; user-select: none; }
 .ring { width: 96px; height: 96px; margin: 0 auto; display: block; }
