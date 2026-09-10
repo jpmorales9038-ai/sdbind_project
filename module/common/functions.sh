@@ -193,7 +193,8 @@ df_stats() {
 }
 
 dump_storage() {
-    df_out=$(run_global df -Ph 2>/dev/null)
+    df_out=$(run_global df -aPh 2>/dev/null)
+    [ -n "$df_out" ] || df_out=$(run_global df -Ph 2>/dev/null)
     [ -n "$df_out" ] || df_out=$(df -Ph 2>/dev/null)
 
     echo "$df_out" | awk '
@@ -213,27 +214,60 @@ dump_storage() {
     '
 
     seen="|"
-    [ -r /proc/1/mounts ] || return 0
     while IFS= read -r d; do
         [ -n "$d" ] || continue
         id=$(basename "$d")
-        case "$id" in emulated|self|sdcard|media_rw|"") continue ;; esac
+        case "$id" in emulated|self|sdcard|media_rw|user|runtime|pass_through|"" ) continue ;; esac
         case "$seen" in *"|$id|"*) continue ;; esac
-        stats=$(echo "$df_out" | awk -v mp="$(strip_slash "$d")" '
+
+        stats=$(echo "$df_out" | awk -v id="$id" '
             NR == 1 { next }
-            { m = $NF; sub(/\/$/, "", m); if (m == mp) { gsub(/%/, "", $(NF-1)); print $(NF-4) "|" $(NF-3) "|" $(NF-2) "|" $(NF-1); exit } }
+            {
+                m = $NF
+                sub(/\/$/, "", m)
+                n = m
+                sub(/^.*\//, "", n)
+                if (n == id && m !~ /emulated/ && m !~ /^\/data/) {
+                    gsub(/%/, "", $(NF-1))
+                    print $(NF-4) "|" $(NF-3) "|" $(NF-2) "|" $(NF-1)
+                    exit
+                }
+            }
         ')
         if [ -z "$stats" ]; then
-            stats=$(df_stats "$d") || continue
+            stats=$(df_stats "$d")
         fi
-        echo "EXTERNAL|$d|$stats"
+        if [ -z "$stats" ]; then
+            stats=$(df_stats "/mnt/media_rw/$id")
+        fi
+        if [ -z "$stats" ]; then
+            stats=$(df_stats "/storage/$id")
+        fi
+        [ -n "$stats" ] || continue
+
+        path="$d"
+        [ -d "/mnt/media_rw/$id" ] && path="/mnt/media_rw/$id"
+        echo "EXTERNAL|$path|$stats"
         seen="${seen}${id}|"
     done <<EOF
-$(awk '
-    $2 ~ /^\/mnt\/media_rw\/[^/]+$/ { print $2 }
-    $2 ~ /^\/mnt\/expand\/[^/]+$/ { print $2 }
-    $2 ~ /^\/storage\/[^/]+$/ && $2 !~ /emulated|self|sdcard/ { print $2 }
-' /proc/1/mounts)
+$( {
+    [ -r /proc/1/mounts ] && awk '
+        $2 ~ /^\/mnt\/media_rw\/[^/]+$/ { print $2 }
+        $2 ~ /^\/mnt\/expand\/[^/]+$/ { print $2 }
+        $2 ~ /^\/storage\/[^/]+$/ && $2 !~ /emulated|self|sdcard/ { print $2 }
+        $2 ~ /^\/mnt\/runtime\/default\/[^/]+$/ && $2 !~ /emulated/ { print $2 }
+    ' /proc/1/mounts
+    echo "$df_out" | awk '
+        NR == 1 { next }
+        {
+            m = $NF
+            sub(/\/$/, "", m)
+            if (m ~ /^\/mnt\/media_rw\/[^/]+$/) print m
+            else if (m ~ /^\/mnt\/expand\/[^/]+$/) print m
+            else if (m ~ /^\/storage\/[^/]+$/ && m !~ /emulated|self|sdcard/) print m
+        }
+    '
+} | sort -u )
 EOF
 }
 

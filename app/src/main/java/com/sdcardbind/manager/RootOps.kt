@@ -157,19 +157,22 @@ object RootOps {
     }
 
     suspend fun storageVolumes(): List<StorageVolume> {
-        var lines = exec("sh $WEBCTL storage")
-        var parsed = lines.mapNotNull { parseStorageLine(it) }
-        if (parsed.isEmpty()) {
-            parsed = exec("cat $MODDIR/storage.cache 2>/dev/null").mapNotNull { parseStorageLine(it) }
-        } else {
-            val body = lines.filter { it.startsWith("INTERNAL|") || it.startsWith("EXTERNAL|") }.joinToString("\n")
-            if (body.isNotBlank()) {
-                withContext(Dispatchers.IO) {
-                    Shell.cmd("cat > $MODDIR/storage.cache << 'SDBIND_ST'\n$body\nSDBIND_ST").exec()
-                }
+        val fromCtl = exec("sh $WEBCTL storage").mapNotNull { parseStorageLine(it) }
+        val fromDf = fallbackDf()
+        val internals = (fromCtl.filter { it.kind == VolumeKind.INTERNAL } +
+            fromDf.filter { it.kind == VolumeKind.INTERNAL }).distinctBy { volId(it.path) }
+        val externals = (fromCtl.filter { it.kind == VolumeKind.EXTERNAL } +
+            fromDf.filter { it.kind == VolumeKind.EXTERNAL }).distinctBy { volId(it.path) }
+        val merged = internals.take(1) + externals
+        if (merged.isNotEmpty()) {
+            val body = merged.joinToString("\n") {
+                "${it.kind.name}|${it.path}|${it.totalHuman}|${it.usedHuman}|${it.availHuman}|${it.usePercent}"
+            }
+            withContext(Dispatchers.IO) {
+                Shell.cmd("cat > $MODDIR/storage.cache << 'SDBIND_ST'\n$body\nSDBIND_ST").exec()
             }
         }
-        return parsed
+        return merged
     }
 
     private fun parseStorageLine(line: String): StorageVolume? {
@@ -196,21 +199,23 @@ object RootOps {
         for (line in lines) {
             val cols = line.trim().split(Regex("\\s+"))
             if (cols.size < 6) continue
-            val mp = cols[5]
+            val mp = cols.last()
             val kind = when {
                 mp == "/data" || mp == "/data/media" || mp.startsWith("/storage/emulated") -> VolumeKind.INTERNAL
                 mp.startsWith("/mnt/media_rw/") || mp.startsWith("/mnt/expand/") -> VolumeKind.EXTERNAL
+                mp.startsWith("/mnt/runtime/default/") && !mp.contains("emulated") -> VolumeKind.EXTERNAL
                 mp.startsWith("/storage/") && !mp.contains("emulated") && !mp.endsWith("/self") -> VolumeKind.EXTERNAL
                 else -> continue
             }
+            val use = cols[cols.size - 2]
             result.add(
                 StorageVolume(
                     kind = kind,
                     path = mp,
-                    totalHuman = cols[1],
-                    usedHuman = cols[2],
-                    availHuman = cols[3],
-                    usePercent = cols[4].removeSuffix("%").toIntOrNull() ?: 0
+                    totalHuman = cols[cols.size - 5],
+                    usedHuman = cols[cols.size - 4],
+                    availHuman = cols[cols.size - 3],
+                    usePercent = use.removeSuffix("%").toIntOrNull() ?: 0
                 )
             )
         }
