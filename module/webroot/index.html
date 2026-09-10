@@ -35,6 +35,32 @@
         <h2>Registro</h2>
         <pre id="log" class="log"></pre>
       </section>
+
+      <section class="pane-about hidden" id="aboutPane">
+        <h2>Acerca de</h2>
+        <div class="about-hero">
+          <img src="avatar.jpg" alt="ENZO BRADO" class="about-avatar" />
+          <div>
+            <div class="about-name">ENZO BRADO</div>
+            <div class="about-ver" id="aboutVer">SD Bind</div>
+          </div>
+        </div>
+        <h2>Herramientas</h2>
+        <div class="tool-wide">
+          <div class="tool-ico">↑</div>
+          <div class="tool-copy">
+            <div class="tool-title">Actualizaciones</div>
+            <div class="tool-desc">Desde GitHub Releases, sola</div>
+          </div>
+          <button type="button" id="updateBtn" class="tool-btn">Buscar</button>
+        </div>
+        <div class="tool-grid">
+          <div class="tool-card"><div class="tool-ico">📁</div><div class="tool-title">Vínculos</div><div class="tool-desc">SD u OTG al almacenamiento interno</div></div>
+          <div class="tool-card"><div class="tool-ico">⚙</div><div class="tool-title">Módulo</div><div class="tool-desc">KernelSU + WebUI de respaldo</div></div>
+          <div class="tool-card"><div class="tool-ico">USB</div><div class="tool-title">OTG</div><div class="tool-desc">Popup al conectar USB</div></div>
+          <div class="tool-card"><div class="tool-ico">◉</div><div class="tool-title">Material You</div><div class="tool-desc">Colores dinámicos del sistema</div></div>
+        </div>
+      </section>
     </div>
 
     <button id="fab" class="fab" title="Añadir vínculo">+</button>
@@ -42,6 +68,7 @@
     <nav class="bottom" id="bottomNav">
       <button class="navchip on" data-tab="home">Inicio</button>
       <button class="navchip" data-tab="log">Registro</button>
+      <button class="navchip" data-tab="about">Acerca de</button>
     </nav>
   </div>
 

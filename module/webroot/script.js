@@ -354,8 +354,11 @@ document.getElementById("bottomNav").onclick = function (e) {
   document.getElementById("homePane").className = tab === "home" ? "pane-binds" : "pane-binds hidden";
   document.querySelector(".pane-storage").className = tab === "home" ? "pane-storage" : "pane-storage hidden";
   document.getElementById("logPane").className = tab === "log" ? "pane-log" : "pane-log hidden";
+  var about = document.getElementById("aboutPane");
+  if (about) about.className = tab === "about" ? "pane-about" : "pane-about hidden";
   document.getElementById("fab").className = tab === "home" ? "fab" : "fab hidden";
   if (tab === "log") refreshLog();
+  if (tab === "about") loadAboutVer();
 };
 
 var picker = {
@@ -453,6 +456,68 @@ document.getElementById("pickerOk").onclick = function () {
     .then(function () { toast("Montado en " + dest); })
     .catch(function (err) { toast(err.message || String(err)); });
 };
+
+function loadAboutVer() {
+  var el = document.getElementById("aboutVer");
+  if (!el) return;
+  sh("grep '^version=' " + MODDIR + "/module.prop").then(function (res) {
+    var v = String(res.stdout || "").replace("version=", "").trim() || "v2.5.0";
+    el.textContent = "SD Bind  ·  " + v;
+  }).catch(function () {});
+}
+
+function verParts(s) {
+  return String(s || "").replace(/^v/i, "").split(/[^0-9]+/).map(function (n) { return parseInt(n, 10) || 0; });
+}
+function isNewer(remote, local) {
+  var a = verParts(remote), b = verParts(local);
+  var n = Math.max(a.length, b.length);
+  for (var i = 0; i < n; i++) {
+    var x = a[i] || 0, y = b[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
+function checkUpdate() {
+  toast("Buscando actualizaciones...");
+  Promise.all([
+    sh("grep '^version=' " + MODDIR + "/module.prop"),
+    sh("cat " + MODDIR + "/github.repo")
+  ]).then(function (rs) {
+    var local = String(rs[0].stdout || "").replace("version=", "").trim() || "v2.5.0";
+    var repo = String(rs[1].stdout || "").split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l && l.charAt(0) !== "#"; })[0] || "jpmorales9038-ai/sdbind_project";
+    if (!repo || repo.indexOf("/") < 0) {
+      toast("Falta el repo de GitHub");
+      return;
+    }
+    return sh("curl -sL -H 'User-Agent: SDBind' https://api.github.com/repos/" + repo + "/releases/latest").then(function (res) {
+      var json;
+      try { json = JSON.parse(res.stdout); } catch (e) { toast("GitHub no respondió"); return; }
+      if (!json || !json.tag_name) {
+        var msg = (json && json.message) || "Sin releases";
+        toast(/not found/i.test(msg) ? "Todavía no hay releases. Esperá a que Actions publique uno." : msg);
+        return;
+      }
+      if (!isNewer(json.tag_name, local)) { toast("Ya estás al día (" + local + ")"); return; }
+      var zip = "";
+      var assets = json.assets || [];
+      for (var i = 0; i < assets.length; i++) {
+        if (String(assets[i].name || "").toLowerCase().indexOf(".zip") >= 0) {
+          zip = assets[i].browser_download_url; break;
+        }
+      }
+      if (!zip) { toast("La release no trae un .zip"); return; }
+      toast("Descargando " + json.tag_name + "...");
+      var tmp = "/data/local/tmp/sdbind_update.zip";
+      return sh("curl -L -o " + tmp + " " + JSON.stringify(zip) + " && (ksud module install " + tmp + " || magisk --install-module " + tmp + ") && unzip -o " + tmp + " 'app/*.apk' -d /data/local/tmp/sdbind_up >/dev/null 2>&1; pm install -r /data/local/tmp/sdbind_up/app/*.apk >/dev/null 2>&1; true")
+        .then(function () { toast("Actualizado a " + json.tag_name + ". Reiniciá si hace falta."); });
+    });
+  }).catch(function (err) { toast(err.message || String(err)); });
+}
+
+var updateBtn = document.getElementById("updateBtn");
+if (updateBtn) updateBtn.onclick = checkUpdate;
 
 function boot(found) {
   if (found) {

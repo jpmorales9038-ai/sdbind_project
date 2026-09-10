@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Tab { Home, Log }
+private enum class Tab { Home, Log, About }
 private enum class Flow { Home, PickSource, PickDest }
 
 private val spatial = spring<IntOffset>(
@@ -253,6 +253,7 @@ fun BindApp() {
         flow == Flow.PickSource -> "src"
         flow == Flow.PickDest -> "dst"
         tab == Tab.Log -> "log"
+        tab == Tab.About -> "about"
         else -> "home"
     }
 
@@ -284,7 +285,7 @@ fun BindApp() {
         },
         bottomBar = {
             AnimatedVisibility(
-                visible = !landscape && (screen == "home" || screen == "log") && rootOk == true,
+                visible = !landscape && (screen == "home" || screen == "log" || screen == "about") && rootOk == true,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut()
             ) {
@@ -293,7 +294,7 @@ fun BindApp() {
         }
     ) { pad ->
         Row(Modifier.fillMaxSize().padding(pad)) {
-            if (landscape && (screen == "home" || screen == "log") && rootOk == true) {
+            if (landscape && (screen == "home" || screen == "log" || screen == "about") && rootOk == true) {
                 SideRail(tab = tab, onTab = { tab = it })
             }
             AnimatedContent(
@@ -349,6 +350,20 @@ fun BindApp() {
                     }
                 )
                 "log" -> LogPane(log)
+                "about" -> AboutPane(
+                    busy = busy,
+                    onCheck = {
+                        scope.launch {
+                            busy = true
+                            snack = "Buscando actualizaciones..."
+                            val ver = runCatching {
+                                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                            }.getOrNull() ?: "2.5.0"
+                            snack = Updater.checkAndInstall(context, ver ?: "2.5.0")
+                            busy = false
+                        }
+                    }
+                )
                 else -> HomePane(
                     volumes = volumes,
                     entries = entries,
@@ -517,6 +532,12 @@ private fun SideRail(tab: Tab, onTab: (Tab) -> Unit) {
             icon = { Icon(Icons.Filled.Notes, contentDescription = "Registro") },
             label = { Text("Registro") }
         )
+        NavigationRailItem(
+            selected = tab == Tab.About,
+            onClick = { onTab(Tab.About) },
+            icon = { Icon(Icons.Filled.Info, contentDescription = "Acerca de") },
+            label = { Text("Acerca") }
+        )
     }
 }
 
@@ -537,6 +558,7 @@ private fun BottomNav(tab: Tab, onTab: (Tab) -> Unit) {
         ) {
             NavChip("Inicio", Icons.Filled.Home, tab == Tab.Home) { onTab(Tab.Home) }
             NavChip("Registro", Icons.Filled.Notes, tab == Tab.Log) { onTab(Tab.Log) }
+            NavChip("Acerca de", Icons.Filled.Info, tab == Tab.About) { onTab(Tab.About) }
         }
     }
 }
@@ -846,6 +868,134 @@ private fun StatusChip(status: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.clip(CircleShape).background(bg).padding(horizontal = 8.dp, vertical = 2.dp)
     )
+}
+
+@Composable
+private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val ver = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "2.5.0"
+    }
+    val squircle = RoundedCornerShape(28.dp)
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
+    ) {
+        Spacer(Modifier.height(12.dp))
+        Text("Acerca de", color = cs.onBackground, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(20.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(36.dp))
+                .background(cs.surfaceContainer)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Image(
+                painter = painterResource(R.drawable.avatar),
+                contentDescription = "Avatar",
+                modifier = Modifier
+                    .size(128.dp)
+                    .clip(squircle),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(Modifier.height(16.dp))
+            Text("ENZO BRADO", color = cs.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("SD Bind  ·  v$ver", color = cs.onSurfaceVariant, fontSize = 14.sp)
+        }
+        Spacer(Modifier.height(24.dp))
+        Text("Herramientas", color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(cs.surfaceContainerHigh)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(52.dp).clip(RoundedCornerShape(18.dp)).background(cs.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.SystemUpdate, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(26.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Actualizaciones", color = cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Text("Desde GitHub Releases, sola", color = cs.onSurfaceVariant, fontSize = 12.sp)
+            }
+            Button(
+                onClick = onCheck,
+                enabled = !busy,
+                shape = CircleShape,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                if (busy) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = cs.onPrimary)
+                } else {
+                    Text("Buscar")
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AboutMiniCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.Folder,
+                title = "Vínculos",
+                body = "SD u OTG al almacenamiento interno"
+            )
+            AboutMiniCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.Build,
+                title = "Módulo",
+                body = "KernelSU + WebUI de respaldo"
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AboutMiniCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.SdCard,
+                title = "OTG",
+                body = "Popup al conectar USB"
+            )
+            AboutMiniCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.ColorLens,
+                title = "Material You",
+                body = "Colores dinámicos del sistema"
+            )
+        }
+        Spacer(Modifier.height(96.dp))
+    }
+}
+
+@Composable
+private fun AboutMiniCard(modifier: Modifier, icon: ImageVector, title: String, body: String) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        modifier
+            .clip(RoundedCornerShape(28.dp))
+            .background(cs.surfaceContainer)
+            .padding(16.dp)
+            .height(148.dp)
+    ) {
+        Box(
+            Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(cs.secondaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(title, color = cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(4.dp))
+        Text(body, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 @Composable

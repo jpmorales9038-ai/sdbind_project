@@ -2,7 +2,11 @@ name: Build APK + módulo KSU
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -48,3 +52,29 @@ jobs:
         with:
           name: sdcard_bind_ui_con_app
           path: sdcard_bind_ui_con_app.zip
+
+      - name: Versión y update.json
+        id: ver
+        run: |
+          VER=$(grep '^version=' module/module.prop | cut -d= -f2 | tr -d '\r')
+          CODE=$(grep '^versionCode=' module/module.prop | cut -d= -f2 | tr -d '\r')
+          echo "tag=$VER" >> "$GITHUB_OUTPUT"
+          cat > update.json << EOF
+          {
+            "version": "$VER",
+            "versionCode": $CODE,
+            "zipUrl": "https://github.com/jpmorales9038-ai/sdbind_project/releases/download/${VER}/sdcard_bind_ui_con_app.zip",
+            "changelog": "https://github.com/jpmorales9038-ai/sdbind_project/releases/tag/${VER}"
+          }
+          EOF
+
+      - name: Publicar GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: SD Bind ${{ steps.ver.outputs.tag }}
+          files: |
+            sdcard_bind_ui_con_app.zip
+            update.json
+          generate_release_notes: true
+          make_latest: true
