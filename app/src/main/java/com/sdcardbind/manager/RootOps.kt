@@ -135,6 +135,12 @@ object RootOps {
         return result.isSuccess
     }
 
+    suspend fun removeMount(source: String, dest: String): Boolean {
+        val cmd = "sh $WEBCTL remove ${shQuote(normalizeDir(source))} ${shQuote(normalizeDir(dest))}"
+        val result = withContext(Dispatchers.IO) { Shell.cmd(cmd).exec() }
+        return result.isSuccess
+    }
+
     suspend fun tailLog(): String {
         return exec("sh $WEBCTL log").joinToString("\n")
     }

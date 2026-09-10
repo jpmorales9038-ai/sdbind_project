@@ -15,6 +15,11 @@ case "$1" in
         echo "DONE"
         ;;
 
+    remove)
+        remove_entry "$2" "$3"
+        echo "DONE"
+        ;;
+
     status)
         [ -f "$CONF" ] || exit 0
         while IFS='|' read -r SRC DEST ENABLED || [ -n "$SRC" ]; do
@@ -78,6 +83,6 @@ case "$1" in
         ;;
 
     *)
-        echo "Uso: webctl.sh {apply|unmount|status|detect|list_children <ruta>|log|storage|theme}"
+        echo "Uso: webctl.sh {apply|unmount|remove <origen> <destino>|status|detect|list_children <ruta>|log|storage|theme}"
         ;;
 esac

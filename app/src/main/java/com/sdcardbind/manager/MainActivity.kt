@@ -137,6 +137,7 @@ fun BindApp() {
     var pendingSource by remember { mutableStateOf("") }
     var snack by remember { mutableStateOf<String?>(null) }
     var otgPopup by remember { mutableStateOf<StorageVolume?>(null) }
+    var pendingDelete by remember { mutableStateOf<MountEntry?>(null) }
     var volumesPrimed by remember { mutableStateOf(false) }
     var extMisses by remember { mutableStateOf(mapOf<String, Int>()) }
 
@@ -375,7 +376,7 @@ fun BindApp() {
                     onToggle = { i, on ->
                         entries = entries.toMutableList().also { it[i] = it[i].copy(enabled = on) }
                     },
-                    onDelete = { i -> entries = entries.toMutableList().also { it.removeAt(i) } },
+                    onDelete = { i -> pendingDelete = entries.getOrNull(i) },
                     onApply = {
                         scope.launch {
                             busy = true
@@ -399,6 +400,31 @@ fun BindApp() {
         }
     }
     OtgConnectPopup(vol = otgPopup, onDismiss = { otgPopup = null })
+    pendingDelete?.let { entry ->
+        val name = dirBaseName(entry.dest).ifBlank { dirBaseName(entry.source).ifBlank { "este vínculo" } }
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Eliminar vínculo") },
+            text = { Text("Se borra «$name» de forma permanente y se desmonta si está montado.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDelete = null
+                        scope.launch {
+                            busy = true
+                            val ok = RootOps.removeMount(entry.source, entry.dest)
+                            snack = if (ok) "Vínculo eliminado" else "No se pudo eliminar"
+                            refresh()
+                            busy = false
+                        }
+                    }
+                ) { Text("Eliminar", color = cs.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("Cancelar") }
+            }
+        )
+    }
     }
 }
 
@@ -478,9 +504,6 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
                         contentScale = ContentScale.Crop
                     )
                 }
-                Spacer(Modifier.height(16.dp))
-                Text("${shown.availHuman} libres", color = cs.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text("${shown.usedHuman} / ${shown.totalHuman}", color = cs.onSurfaceVariant, fontSize = 13.sp)
                 Spacer(Modifier.height(8.dp))
             }
         }

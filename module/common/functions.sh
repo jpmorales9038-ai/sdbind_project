@@ -155,6 +155,30 @@ unmount_all() {
     each_entry _unmount_cb
 }
 
+remove_entry() {
+    SRC=$(ensure_slash "$1")
+    DEST=$(ensure_slash "$2")
+    unmount_one "$DEST"
+    [ -f "$CONF" ] || return 0
+    tmp="$CONF.tmp.$$"
+    : > "$tmp"
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            ""|\#*) echo "$line" >> "$tmp"; continue ;;
+        esac
+        S=${line%%|*}
+        rest=${line#*|}
+        D=${rest%%|*}
+        if [ "$(strip_slash "$S")" = "$(strip_slash "$SRC")" ] && [ "$(strip_slash "$D")" = "$(strip_slash "$DEST")" ]; then
+            log "Eliminado: $S -> $D"
+            continue
+        fi
+        echo "$line" >> "$tmp"
+    done < "$CONF"
+    mv "$tmp" "$CONF"
+    chmod 644 "$CONF" 2>/dev/null
+}
+
 # SIZE|USED|AVAIL|PERCENT desde el namespace de init (no el de la app/WebUI)
 df_stats() {
     mp=$(strip_slash "$1")

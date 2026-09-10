@@ -117,7 +117,17 @@ function addRow(src, dest, enabled, status) {
       '<span class="status-tag ' + (status || "") + '">' + statusLabel(status) + "</span>" +
       '<button type="button" class="iconbtn">x</button>' +
     "</div>";
-  row.querySelector(".iconbtn").onclick = function () { row.parentNode.removeChild(row); syncEmpty(); };
+  row.querySelector(".iconbtn").onclick = function () {
+    var src = row.querySelector(".src").value.trim();
+    var dest = row.querySelector(".dest").value.trim();
+    var name = baseName(dest) || baseName(src) || "este vínculo";
+    if (!confirm("¿Eliminar «" + name + "» de forma permanente?\nSe desmonta si está montado.")) return;
+    toast("Eliminando...");
+    sh(WEBCTL + " remove " + JSON.stringify(slash(src)) + " " + JSON.stringify(slash(dest)))
+      .then(refreshAll)
+      .then(function () { toast("Vínculo eliminado"); })
+      .catch(function (err) { toast(err.message || String(err)); });
+  };
   rowsEl.appendChild(row);
   syncEmpty();
 }
