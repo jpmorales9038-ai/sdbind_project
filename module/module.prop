@@ -1,7 +1,7 @@
 id=sdcard_bind_ui
 name=SD/OTG Bind Mount UI
-version=v2.4.6
-versionCode=246
+version=v2.4.7
+versionCode=247
 author=pablo
 description=Monta carpetas de una tarjeta SD o unidad OTG como carpetas dentro del almacenamiento interno. Incluye instalación automática de la app SD Bind Manager (Compose) con explorador de carpetas e info de almacenamiento; también trae WebUI de respaldo. Compatible con KernelSU y KernelSU-Next.
 updateJson=

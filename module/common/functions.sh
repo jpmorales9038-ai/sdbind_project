@@ -179,7 +179,7 @@ remove_entry() {
     chmod 644 "$CONF" 2>/dev/null
 }
 
-# SIZE|USED|AVAIL|PERCENT desde el namespace de init (no el de la app/WebUI)
+# SIZE|USED|AVAIL|PERCENT — solo si df reporta ESTE mountpoint (no el padre 2.6G)
 df_stats() {
     mp=$(strip_slash "$1")
     [ -n "$mp" ] || return 1
@@ -187,6 +187,9 @@ df_stats() {
     line=$(run_global df -Ph "$mp" 2>/dev/null | awk 'NR==2 {print}')
     [ -n "$line" ] || line=$(run_global df -h "$mp" 2>/dev/null | awk 'NR==2 {print}')
     [ -n "$line" ] || return 1
+    reported=$(echo "$line" | awk '{print $NF}')
+    reported=$(strip_slash "$reported")
+    [ "$reported" = "$mp" ] || return 1
     echo "$line" | awk '{
         gsub(/%/, "", $(NF-1))
         print $(NF-4) "|" $(NF-3) "|" $(NF-2) "|" $(NF-1)
@@ -198,48 +201,29 @@ df_stats() {
 dump_storage() {
     if stats=$(df_stats /data); then
         echo "INTERNAL|/data|$stats"
-    elif stats=$(df_stats /storage/emulated); then
-        echo "INTERNAL|/storage/emulated|$stats"
+    elif stats=$(df_stats /data/media); then
+        echo "INTERNAL|/data/media|$stats"
     elif stats=$(df_stats /storage/emulated/0); then
         echo "INTERNAL|/storage/emulated/0|$stats"
     fi
 
     seen="|"
-    if [ -r /proc/1/mounts ]; then
-        while IFS= read -r d; do
-            [ -n "$d" ] || continue
-            id=$(basename "$d")
-            case "$seen" in *"|$id|"*) continue ;; esac
-            stats=$(df_stats "$d") || continue
-            echo "EXTERNAL|$d|$stats"
-            seen="${seen}${id}|"
-        done <<EOF
-$(awk '$2 ~ /^\/mnt\/media_rw\/[^/]+$/ || $2 ~ /^\/mnt\/expand\/[^/]+$/ { print $2 }' /proc/1/mounts)
+    [ -r /proc/1/mounts ] || return 0
+    while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        id=$(basename "$d")
+        case "$id" in emulated|self|sdcard|media_rw) continue ;; esac
+        case "$seen" in *"|$id|"*) continue ;; esac
+        stats=$(df_stats "$d") || continue
+        echo "EXTERNAL|$d|$stats"
+        seen="${seen}${id}|"
+    done <<EOF
+$(awk '
+    $2 ~ /^\/mnt\/media_rw\/[^/]+$/ { print $2 }
+    $2 ~ /^\/mnt\/expand\/[^/]+$/ { print $2 }
+    $2 ~ /^\/storage\/[^/]+$/ && $2 !~ /emulated|self|sdcard/ { print $2 }
+' /proc/1/mounts)
 EOF
-    fi
-    for d in /mnt/media_rw/* /mnt/expand/*; do
-        [ -d "$d" ] || continue
-        id=$(basename "$d")
-        case "$seen" in *"|$id|"*) continue ;; esac
-        stats=$(df_stats "$d") || continue
-        echo "EXTERNAL|$d|$stats"
-        seen="${seen}${id}|"
-    done
-    for d in /storage/*; do
-        [ -d "$d" ] || continue
-        case "$d" in
-            */emulated|*/self|*/sdcard) continue ;;
-        esac
-        REAL=$(readlink -f "$d" 2>/dev/null)
-        case "$REAL" in
-            /data/media*) continue ;;
-        esac
-        id=$(basename "$d")
-        case "$seen" in *"|$id|"*) continue ;; esac
-        stats=$(df_stats "$d") || continue
-        echo "EXTERNAL|$d|$stats"
-        seen="${seen}${id}|"
-    done
 }
 
 

@@ -139,36 +139,11 @@ fun BindApp() {
     var otgPopup by remember { mutableStateOf<StorageVolume?>(null) }
     var pendingDelete by remember { mutableStateOf<MountEntry?>(null) }
     var volumesPrimed by remember { mutableStateOf(false) }
-    var extMisses by remember { mutableStateOf(mapOf<String, Int>()) }
 
     fun applyVolumes(next: List<StorageVolume>) {
-        val internals = next.filter { it.kind == VolumeKind.INTERNAL }
-        val incoming = next.filter { it.kind == VolumeKind.EXTERNAL }
-        val prevExt = volumes.filter { it.kind == VolumeKind.EXTERNAL }
-        val misses = extMisses.toMutableMap()
-        val kept = linkedMapOf<String, StorageVolume>()
-        incoming.forEach { vol ->
-            val id = volId(vol.path)
-            kept[id] = vol
-            misses[id] = 0
-        }
-        prevExt.forEach { old ->
-            val id = volId(old.path)
-            if (id !in kept) {
-                val n = (misses[id] ?: 0) + 1
-                if (n < 4) {
-                    misses[id] = n
-                    kept[id] = old
-                } else {
-                    misses.remove(id)
-                }
-            }
-        }
-        extMisses = misses
-        val merged = internals + kept.values.toList()
         val oldKey = volumes.joinToString("|") { "${it.kind}:${volId(it.path)}" }
-        val newKey = merged.joinToString("|") { "${it.kind}:${volId(it.path)}" }
-        volumes = merged
+        val newKey = next.joinToString("|") { "${it.kind}:${volId(it.path)}" }
+        volumes = next
         if (oldKey != newKey) storageGen++
         volumesPrimed = true
     }
