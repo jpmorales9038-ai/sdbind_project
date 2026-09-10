@@ -1,0 +1,50 @@
+name: Build APK + módulo KSU
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar componentes del SDK
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Compilar APK (debug)
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Copiar APK dentro del módulo
+        run: |
+          mkdir -p module/app
+          cp app/build/outputs/apk/debug/app-debug.apk module/app/sdcard-bind-manager.apk
+
+      - name: Empaquetar módulo final (zip listo para instalar)
+        run: |
+          cd module
+          zip -r -X ../sdcard_bind_ui_con_app.zip . -x ".*"
+
+      - name: Subir zip como artefacto descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdcard_bind_ui_con_app
+          path: sdcard_bind_ui_con_app.zip

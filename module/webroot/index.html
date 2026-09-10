@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>SD/OTG Bind Mount</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>SD/OTG Bind Mount</h1>
+    <span id="bridgeStatus" class="badge">comprobando…</span>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Carpetas configuradas</h2>
+      <div id="rows" class="rows"></div>
+      <button id="addRowBtn" class="btn secondary">+ Añadir carpeta</button>
+    </section>
+
+    <section class="card">
+      <h2>Detectar SD / OTG</h2>
+      <p class="hint">Busca tarjetas SD y unidades OTG ya montadas por el sistema.</p>
+      <button id="detectBtn" class="btn secondary">Buscar unidades</button>
+      <div id="detected" class="detected-list"></div>
+    </section>
+
+    <section class="card actions">
+      <button id="saveApplyBtn" class="btn primary">Guardar y montar</button>
+      <button id="unmountBtn" class="btn danger">Desmontar todo</button>
+      <button id="refreshStatusBtn" class="btn secondary">Actualizar estado</button>
+    </section>
+
+    <section class="card">
+      <h2>Registro</h2>
+      <pre id="log" class="log"></pre>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
