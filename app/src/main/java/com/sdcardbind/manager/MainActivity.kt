@@ -33,6 +33,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -42,6 +43,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -56,11 +58,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -131,16 +136,26 @@ fun BindApp() {
     var flow by remember { mutableStateOf(Flow.Home) }
     var pendingSource by remember { mutableStateOf("") }
     var snack by remember { mutableStateOf<String?>(null) }
+    var otgPopup by remember { mutableStateOf<StorageVolume?>(null) }
+    var volumesPrimed by remember { mutableStateOf(false) }
+
+    fun applyVolumes(next: List<StorageVolume>) {
+        val oldExt = volumes.filter { it.kind == VolumeKind.EXTERNAL }.map { it.path }.toSet()
+        val oldKey = volumes.joinToString("|") { "${it.kind}:${it.path}" }
+        val newKey = next.joinToString("|") { "${it.kind}:${it.path}" }
+        val newcomers = next.filter { it.kind == VolumeKind.EXTERNAL && it.path !in oldExt }
+        volumes = next
+        if (oldKey != newKey) storageGen++
+        if (volumesPrimed && newcomers.isNotEmpty()) otgPopup = newcomers.last()
+        volumesPrimed = true
+    }
 
     fun refresh(showSnack: Boolean = false, forceAnim: Boolean = showSnack) {
         scope.launch {
             entries = RootOps.loadMounts()
-            val next = RootOps.storageVolumes()
-            val changed = next.joinToString("|") { "${it.kind}:${it.path}" } !=
-                volumes.joinToString("|") { "${it.kind}:${it.path}" }
-            volumes = next
+            applyVolumes(RootOps.storageVolumes())
             log = RootOps.tailLog()
-            if (forceAnim || changed) storageGen++
+            if (forceAnim) storageGen++
             if (showSnack) snack = "Almacenamiento actualizado"
         }
     }
@@ -159,18 +174,8 @@ fun BindApp() {
     LaunchedEffect(rootOk) {
         if (rootOk != true) return@LaunchedEffect
         while (true) {
-            kotlinx.coroutines.delay(2000)
-            val next = RootOps.storageVolumes()
-            val oldKey = volumes.joinToString("|") { "${it.kind}:${it.path}" }
-            val newKey = next.joinToString("|") { "${it.kind}:${it.path}" }
-            val hadExt = volumes.any { it.kind == VolumeKind.EXTERNAL }
-            volumes = next
-            if (oldKey != newKey) {
-                storageGen++
-                val hasExt = next.any { it.kind == VolumeKind.EXTERNAL }
-                if (!hadExt && hasExt) snack = "Unidad detectada"
-                else if (hadExt && !hasExt) snack = "Unidad desconectada"
-            }
+            kotlinx.coroutines.delay(1500)
+            applyVolumes(RootOps.storageVolumes())
         }
     }
 
@@ -214,6 +219,7 @@ fun BindApp() {
         else -> "home"
     }
 
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = cs.background,
         snackbarHost = {
@@ -337,6 +343,81 @@ fun BindApp() {
                 )
             }
         }
+        }
+    }
+    OtgConnectPopup(vol = otgPopup, onDismiss = { otgPopup = null })
+    }
+}
+
+@Composable
+private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    LaunchedEffect(vol?.path) {
+        if (vol != null) {
+            kotlinx.coroutines.delay(8000)
+            onDismiss()
+        }
+    }
+    AnimatedVisibility(
+        visible = vol != null,
+        enter = fadeIn(tween(200)) + slideInVertically(tween(480, easing = FastOutSlowInEasing)) { it },
+        exit = fadeOut(tween(180)) + slideOutVertically(tween(280, easing = FastOutSlowInEasing)) { it }
+    ) {
+        val shown = vol ?: return@AnimatedVisibility
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(onClick = onDismiss)
+            )
+            Column(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(cs.surfaceContainerHigh)
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(Modifier.fillMaxWidth()) {
+                    Text(
+                        shown.label,
+                        color = cs.onSurface,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.CenterEnd).size(36.dp)
+                    ) {
+                        Icon(Icons.Filled.Close, contentDescription = "Cerrar", tint = cs.onSurfaceVariant)
+                    }
+                }
+                Text("Unidad de almacenamiento", color = cs.onSurfaceVariant, fontSize = 13.sp)
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    Modifier
+                        .size(200.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color(0xFF141414)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.usb_otg),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("${shown.availHuman} libres", color = cs.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("${shown.usedHuman} / ${shown.totalHuman}", color = cs.onSurfaceVariant, fontSize = 13.sp)
+                Spacer(Modifier.height(8.dp))
+            }
         }
     }
 }
