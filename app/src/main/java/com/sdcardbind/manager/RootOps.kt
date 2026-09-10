@@ -166,7 +166,7 @@ object RootOps {
     }
 
     private suspend fun fallbackDf(): List<StorageVolume> {
-        val lines = exec("df -Ph 2>/dev/null")
+        val lines = exec("nsenter -t 1 -m -- df -Ph 2>/dev/null || df -Ph 2>/dev/null")
         val result = mutableListOf<StorageVolume>()
         for (line in lines) {
             val cols = line.trim().split(Regex("\\s+"))

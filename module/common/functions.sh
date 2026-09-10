@@ -155,16 +155,14 @@ unmount_all() {
     each_entry _unmount_cb
 }
 
-# Una línea: SIZE|USED|AVAIL|PERCENT  — solo si $1 ES un mountpoint real
+# SIZE|USED|AVAIL|PERCENT desde el namespace de init (no el de la app/WebUI)
 df_stats() {
     mp=$(strip_slash "$1")
-    [ -e "$mp" ] || return 1
-    awk -v p="$mp" '$2 == p { found=1 } END { exit !found }' /proc/1/mounts 2>/dev/null || return 1
-    line=$(df -Ph "$mp" 2>/dev/null | awk 'NR==2 {print}')
-    [ -n "$line" ] || line=$(df -h "$mp" 2>/dev/null | awk 'NR==2 {print}')
+    [ -n "$mp" ] || return 1
+    run_global test -d "$mp" || return 1
+    line=$(run_global df -Ph "$mp" 2>/dev/null | awk 'NR==2 {print}')
+    [ -n "$line" ] || line=$(run_global df -h "$mp" 2>/dev/null | awk 'NR==2 {print}')
     [ -n "$line" ] || return 1
-    reported=$(echo "$line" | awk '{print $NF}')
-    [ "$reported" = "$mp" ] || [ "$reported" = "$mp/" ] || return 1
     echo "$line" | awk '{
         gsub(/%/, "", $(NF-1))
         print $(NF-4) "|" $(NF-3) "|" $(NF-2) "|" $(NF-1)
@@ -183,6 +181,18 @@ dump_storage() {
     fi
 
     seen="|"
+    if [ -r /proc/1/mounts ]; then
+        while IFS= read -r d; do
+            [ -n "$d" ] || continue
+            id=$(basename "$d")
+            case "$seen" in *"|$id|"*) continue ;; esac
+            stats=$(df_stats "$d") || continue
+            echo "EXTERNAL|$d|$stats"
+            seen="${seen}${id}|"
+        done <<EOF
+$(awk '$2 ~ /^\/mnt\/media_rw\/[^/]+$/ || $2 ~ /^\/mnt\/expand\/[^/]+$/ { print $2 }' /proc/1/mounts)
+EOF
+    fi
     for d in /mnt/media_rw/* /mnt/expand/*; do
         [ -d "$d" ] || continue
         id=$(basename "$d")

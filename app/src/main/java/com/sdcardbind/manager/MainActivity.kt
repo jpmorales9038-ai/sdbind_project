@@ -138,37 +138,61 @@ fun BindApp() {
     var snack by remember { mutableStateOf<String?>(null) }
     var otgPopup by remember { mutableStateOf<StorageVolume?>(null) }
     var volumesPrimed by remember { mutableStateOf(false) }
+    var extMisses by remember { mutableStateOf(mapOf<String, Int>()) }
 
     fun applyVolumes(next: List<StorageVolume>) {
-        val oldIds = volumes.filter { it.kind == VolumeKind.EXTERNAL }.map { volId(it.path) }.toSet()
-        val oldKey = volumes.joinToString("|") { "${it.kind}:${it.path}" }
-        val newKey = next.joinToString("|") { "${it.kind}:${it.path}" }
-        val newIds = next.filter { it.kind == VolumeKind.EXTERNAL }.map { volId(it.path) }.filter { it !in oldIds }
-        volumes = next
-        if (oldKey != newKey) storageGen++
-        if (volumesPrimed && newIds.isNotEmpty()) {
-            val waitFor = newIds.toSet()
-            scope.launch {
-                var best: StorageVolume? = null
-                repeat(6) {
-                    kotlinx.coroutines.delay(450)
-                    val latest = RootOps.storageVolumes()
-                    volumes = latest
-                    best = latest.filter { it.kind == VolumeKind.EXTERNAL && volId(it.path) in waitFor }
-                        .sortedWith(
-                            compareByDescending<StorageVolume> { it.path.contains("media_rw") }
-                                .thenByDescending { humanToBytes(it.totalHuman) }
-                        )
-                        .firstOrNull()
-                    if (best != null && humanToBytes(best!!.totalHuman) >= 16L * 1024 * 1024) {
-                        otgPopup = best
-                        return@launch
-                    }
+        val internals = next.filter { it.kind == VolumeKind.INTERNAL }
+        val incoming = next.filter { it.kind == VolumeKind.EXTERNAL }
+        val prevExt = volumes.filter { it.kind == VolumeKind.EXTERNAL }
+        val misses = extMisses.toMutableMap()
+        val kept = linkedMapOf<String, StorageVolume>()
+        incoming.forEach { vol ->
+            val id = volId(vol.path)
+            kept[id] = vol
+            misses[id] = 0
+        }
+        prevExt.forEach { old ->
+            val id = volId(old.path)
+            if (id !in kept) {
+                val n = (misses[id] ?: 0) + 1
+                if (n < 4) {
+                    misses[id] = n
+                    kept[id] = old
+                } else {
+                    misses.remove(id)
                 }
-                if (best != null) otgPopup = best
             }
         }
+        extMisses = misses
+        val merged = internals + kept.values.toList()
+        val oldKey = volumes.joinToString("|") { "${it.kind}:${volId(it.path)}" }
+        val newKey = merged.joinToString("|") { "${it.kind}:${volId(it.path)}" }
+        volumes = merged
+        if (oldKey != newKey) storageGen++
         volumesPrimed = true
+    }
+
+    fun onHardwareAttach() {
+        if (!volumesPrimed) return
+        val known = volumes.filter { it.kind == VolumeKind.EXTERNAL }.map { volId(it.path) }.toSet()
+        scope.launch {
+            var best: StorageVolume? = null
+            repeat(8) {
+                kotlinx.coroutines.delay(400)
+                val latest = RootOps.storageVolumes()
+                applyVolumes(latest)
+                best = latest.filter { it.kind == VolumeKind.EXTERNAL && volId(it.path) !in known }
+                    .sortedWith(
+                        compareByDescending<StorageVolume> { it.path.contains("media_rw") }
+                            .thenByDescending { humanToBytes(it.totalHuman) }
+                    )
+                    .firstOrNull()
+                if (best != null && humanToBytes(best!!.totalHuman) >= 8L * 1024 * 1024) {
+                    otgPopup = best
+                    return@launch
+                }
+            }
+        }
     }
 
     fun refresh(showSnack: Boolean = false, forceAnim: Boolean = showSnack) {
@@ -203,12 +227,20 @@ fun BindApp() {
     DisposableEffect(rootOk) {
         if (rootOk != true) return@DisposableEffect onDispose { }
         val receiver = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, i: Intent?) { refresh(false) }
+            override fun onReceive(c: Context?, i: Intent?) {
+                when (i?.action) {
+                    UsbManager.ACTION_USB_DEVICE_ATTACHED,
+                    Intent.ACTION_MEDIA_MOUNTED -> onHardwareAttach()
+                    UsbManager.ACTION_USB_DEVICE_DETACHED,
+                    Intent.ACTION_MEDIA_UNMOUNTED,
+                    Intent.ACTION_MEDIA_REMOVED,
+                    Intent.ACTION_MEDIA_BAD_REMOVAL -> refresh(false)
+                }
+            }
         }
         val usb = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
-            addAction("android.os.storage.action.VOLUME_STATE_CHANGED")
         }
         val media = IntentFilter().apply {
             addAction(Intent.ACTION_MEDIA_MOUNTED)
