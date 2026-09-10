@@ -112,10 +112,6 @@ class MainActivity : ComponentActivity() {
             AppTheme { BindApp() }
         }
     }
-
-    override fun attachBaseContext(newBase: Context?) {
-        super.attachBaseContext(newBase?.let { Lang.wrap(it) })
-    }
 }
 
 private enum class Tab { Home, Log, About }
@@ -1024,12 +1020,8 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             AppMark(Modifier.size(iconDp))
             Spacer(Modifier.height(16.dp))
             Text("SD Bind", color = cs.onSurface, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text(stringResource(R.string.version_fmt, ver ?: "2.5.3"), color = cs.onSurfaceVariant, fontSize = 14.sp)
+            Text(stringResource(R.string.version_fmt, ver ?: "2.5.4"), color = cs.onSurfaceVariant, fontSize = 14.sp)
         }
-        Spacer(Modifier.height(24.dp))
-        Text(stringResource(R.string.language), color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(12.dp))
-        LanguageRow()
         Spacer(Modifier.height(24.dp))
         Text(stringResource(R.string.tools), color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
@@ -1101,37 +1093,6 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             )
         }
         Spacer(Modifier.height(96.dp))
-    }
-}
-
-@Composable
-private fun LanguageRow() {
-    val ctx = LocalContext.current
-    val current = remember { Lang.current(ctx) }
-    val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        listOf(
-            Lang.SYSTEM to stringResource(R.string.lang_system),
-            Lang.ES to stringResource(R.string.lang_es),
-            Lang.ES_ES to stringResource(R.string.lang_es_es),
-            Lang.EN to stringResource(R.string.lang_en)
-        ).forEach { (tag, label) ->
-            val on = current == tag
-            Text(
-                label,
-                color = if (on) cs.onSecondaryContainer else cs.onSurface,
-                fontSize = 13.sp,
-                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(if (on) cs.secondaryContainer else cs.surfaceContainerHigh)
-                    .clickable { if (!on) Lang.set(ctx, tag) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            )
-        }
     }
 }
 

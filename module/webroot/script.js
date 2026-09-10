@@ -512,14 +512,17 @@ function checkUpdate() {
       }
       if (!zip) { toast(t("no_zip")); return; }
       toast(t("downloading", json.tag_name));
-      var tmp = "/data/local/tmp/sdbind_update.zip";
-      var pub = "/storage/emulated/0/Download/sdbind_update.zip";
+      var tmp = "/data/local/tmp/sdcard_bind_ui.zip";
+      var pub = "/storage/emulated/0/Download/sdcard_bind_ui.zip";
       return sh(
         "curl -L -o " + tmp + " " + JSON.stringify(zip) +
         " && cp " + tmp + " " + pub + " && chmod 644 " + pub +
-        "; am start -a android.intent.action.VIEW -t application/zip -d file://" + pub + " --grant-read-uri-permission --user 0" +
-        " || am start -n com.rifsxd.ksunext/.ui.MainActivity --user 0" +
-        " || am start -n me.weishu.kernelsu/.ui.MainActivity --user 0" +
+        "; am start --user 0 -a android.intent.action.VIEW -t application/zip" +
+        " -n com.rifsxd.ksunext/com.rifsxd.ksunext.ui.MainActivity -d file://" + pub +
+        " || am start --user 0 -a android.intent.action.VIEW -t application/zip" +
+        " -n me.weishu.kernelsu/me.weishu.kernelsu.ui.MainActivity -d file://" + pub +
+        " || am start --user 0 -a android.intent.action.VIEW -t application/zip" +
+        " -n com.topjohnwu.magisk/com.topjohnwu.magisk.ui.MainActivity -d file://" + pub +
         "; true"
       ).then(function () {
         toast(t("in_downloads", json.tag_name));
@@ -694,20 +697,6 @@ function startVolumeWatch() {
     toast(t("refresh_st"));
     loadStorage(true);
   });
-})();
-
-(function bindLang() {
-  var row = document.getElementById("langRow");
-  if (!row) return;
-  row.onclick = function (e) {
-    var b = e.target;
-    if (!b || !b.getAttribute) return;
-    var tag = b.getAttribute("data-lang");
-    if (!tag) return;
-    setLang(tag);
-    try { loadStorage(false); } catch (err) {}
-    try { loadAboutVer(); } catch (err2) {}
-  };
 })();
 
 (function bindSwipe() {

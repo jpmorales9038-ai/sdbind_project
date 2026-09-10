@@ -4,7 +4,7 @@ function guessLang() {
   if (n.indexOf("es-es") === 0) return "es-ES";
   return "es";
 }
-var LANG = localStorage.getItem("sdbind_lang") || guessLang();
+var LANG = guessLang();
 var I18N = {
   es: {
     home: "Inicio", log: "Registro", about: "Acerca de",
@@ -163,12 +163,6 @@ function t(k, a) {
   if (a != null) s = String(s).replace("%s", a);
   return s;
 }
-function setLang(tag) {
-  LANG = tag || guessLang();
-  if (tag) localStorage.setItem("sdbind_lang", tag);
-  else localStorage.removeItem("sdbind_lang");
-  applyI18n();
-}
 function applyI18n() {
   var nodes = document.querySelectorAll("[data-i18n]");
   for (var i = 0; i < nodes.length; i++) {
@@ -177,9 +171,5 @@ function applyI18n() {
   var titles = document.querySelectorAll("[data-i18n-title]");
   for (var k = 0; k < titles.length; k++) {
     titles[k].setAttribute("title", t(titles[k].getAttribute("data-i18n-title")));
-  }
-  var chips = document.querySelectorAll("#langRow button");
-  for (var j = 0; j < chips.length; j++) {
-    chips[j].className = chips[j].getAttribute("data-lang") === LANG ? "on" : "";
   }
 }
