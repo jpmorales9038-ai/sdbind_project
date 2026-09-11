@@ -29,12 +29,29 @@ import kotlinx.coroutines.withContext
 fun AppTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val view = LocalView.current
-    val colorScheme = when {
+    val baseColorScheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (dark) dynamicDarkColorScheme(view.context) else dynamicLightColorScheme(view.context)
         }
         dark -> darkColorScheme()
         else -> lightColorScheme()
+    }
+    // A pedido: en tema oscuro se invierte qué tono cumple cada rol. El fondo de página pasa a
+    // usar el tono casi negro que generaba dynamicDarkColorScheme para surfaceContainerHigh, y
+    // los "stacks"/cards (que en el resto del archivo usan cs.surfaceContainer) pasan a usar el
+    // tono verde oliva que antes era el fondo. OJO: surfaceContainerHigh en sí NO se reasigna
+    // acá, queda con su valor dinámico original — eso es justamente lo que usa el pill
+    // (BottomNav -> pillSolid) para no tocarlo, tal como se pidió antes. Sigue siendo 100%
+    // paleta dinámica: son los mismos tokens que ya calculaba dynamicDarkColorScheme, solo
+    // remapeados a otro rol, nunca un color fijo.
+    val colorScheme = if (dark) {
+        baseColorScheme.copy(
+            background = baseColorScheme.surfaceContainerHigh,
+            surface = baseColorScheme.surfaceContainerHigh,
+            surfaceContainer = baseColorScheme.background
+        )
+    } else {
+        baseColorScheme
     }
     val shapes = Shapes(
         extraSmall = RoundedCornerShape(12.dp),
