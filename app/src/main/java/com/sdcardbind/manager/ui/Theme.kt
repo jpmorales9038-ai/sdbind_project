@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -36,18 +37,19 @@ fun AppTheme(content: @Composable () -> Unit) {
         dark -> darkColorScheme()
         else -> lightColorScheme()
     }
-    // A pedido: en tema oscuro se invierte qué tono cumple cada rol. El fondo de página pasa a
-    // usar el tono casi negro que generaba dynamicDarkColorScheme para surfaceContainerHigh, y
-    // los "stacks"/cards (que en el resto del archivo usan cs.surfaceContainer) pasan a usar el
-    // tono verde oliva que antes era el fondo. OJO: surfaceContainerHigh en sí NO se reasigna
-    // acá, queda con su valor dinámico original — eso es justamente lo que usa el pill
-    // (BottomNav -> pillSolid) para no tocarlo, tal como se pidió antes. Sigue siendo 100%
-    // paleta dinámica: son los mismos tokens que ya calculaba dynamicDarkColorScheme, solo
-    // remapeados a otro rol, nunca un color fijo.
-    val colorScheme = if (dark) {
+    // A pedido: en tema oscuro se invierte qué tono cumple cada rol, intercambiando
+    // directamente background <-> surfaceContainer (el rol que usan la mayoría de las
+    // "stacks"/cards en el resto del archivo). Nada de tokens intermedios: eso fue lo que
+    // salió mal la primera vez (usar surfaceContainerHigh como "el negro" asumiendo que era
+    // más oscuro que surfaceContainer, cuando en esta paleta no lo es). Comparamos luminancia
+    // real antes de intercambiar, por si en algún dispositivo/wallpaper el fondo original ya
+    // sale más oscuro que las cards — así nunca queda al revés sin importar cómo calcule los
+    // tonos ese dynamicDarkColorScheme en particular. surfaceContainerHigh (lo que usa el pill)
+    // no se toca en ningún caso.
+    val colorScheme = if (dark && baseColorScheme.background.luminance() > baseColorScheme.surfaceContainer.luminance()) {
         baseColorScheme.copy(
-            background = baseColorScheme.surfaceContainerHigh,
-            surface = baseColorScheme.surfaceContainerHigh,
+            background = baseColorScheme.surfaceContainer,
+            surface = baseColorScheme.surfaceContainer,
             surfaceContainer = baseColorScheme.background
         )
     } else {
