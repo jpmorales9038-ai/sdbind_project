@@ -5,7 +5,7 @@
 
   **Vincula tarjetas SD y unidades OTG dentro del almacenamiento interno de tu Android — sin copiar archivos.**
 
-  ![versión](https://img.shields.io/badge/versión-v2.5.7-C6F24A?style=for-the-badge&labelColor=131318)
+  ![versión](https://img.shields.io/badge/versión-v2.5.7-c5c0ff?style=for-the-badge&labelColor=131318)
   ![root](https://img.shields.io/badge/root-KernelSU%20%7C%20KernelSU--Next-1c1b21?style=for-the-badge)
   ![plataforma](https://img.shields.io/badge/plataforma-Android-1c1b21?style=for-the-badge)
 </div>
@@ -43,7 +43,8 @@ El proyecto trae dos formas de controlarlo:
 - 📁 **Explorador integrado** para elegir origen y destino tocando `+`, sin escribir rutas.
 - 🌓 **Material You** — colores y formas se adaptan al sistema, con tema claro/oscuro.
 - 🧭 **Navegación flotante tipo "isla"** — la barra inferior difumina el contenido que
-  tiene detrás en vez de taparlo con un fondo sólido.
+  tiene detrás en vez de taparlo con un fondo sólido, con colores adaptativos
+  (Material You) tomados del fondo de pantalla del sistema.
 - ♻️ **Persistencia entre reinicios** — los vínculos se vuelven a aplicar solos al
   arrancar el teléfono (`post-fs-data.sh` / `service.sh`).
 - 🔄 **Autoactualización** — la app comprueba nuevas versiones y descarga el zip listo

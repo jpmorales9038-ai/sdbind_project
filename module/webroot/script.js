@@ -591,6 +591,10 @@ function hslCss(h, s, l) {
   return "hsl(" + Math.round(h) + ", " + Math.round(s) + "%, " + Math.round(l) + "%)";
 }
 
+function hslaCss(h, s, l, a) {
+  return "hsla(" + Math.round(h) + ", " + Math.round(s) + "%, " + Math.round(l) + "%, " + a + ")";
+}
+
 function applySeed(seed) {
   var rgb = hexToRgb(seed);
   if (!rgb) return;
@@ -611,6 +615,10 @@ function applySeed(seed) {
     set("--danger", hslCss(8, 55, 72));
     set("--ok", hslCss(145, 28, 70));
     set("--warn", hslCss(42, 48, 70));
+    set("--pill-bg", hslaCss(h, Math.min(s, 45), 60, 0.40));
+    set("--pill-thumb-bg", hslaCss(h, Math.min(s, 55), 84, 0.86));
+    set("--pill-fg", hslaCss(h, 30, 14, 0.94));
+    set("--pill-border", hslaCss(h, 24, 96, 0.22));
   } else {
     set("--bg", hslCss(h, 16, 96));
     set("--text", hslCss(h, 18, 12));
@@ -623,6 +631,10 @@ function applySeed(seed) {
     set("--danger", hslCss(8, 62, 42));
     set("--ok", hslCss(145, 35, 32));
     set("--warn", hslCss(42, 55, 38));
+    set("--pill-bg", hslaCss(h, Math.min(s, 45), 56, 0.34));
+    set("--pill-thumb-bg", hslaCss(h, Math.min(s, 55), 80, 0.88));
+    set("--pill-fg", hslaCss(h, 30, 16, 0.94));
+    set("--pill-border", hslaCss(h, 24, 10, 0.14));
   }
 }
 
