@@ -293,6 +293,15 @@ fun BindApp() {
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = cs.background,
+        // Por defecto Scaffold reserva el alto de la barra de estado como padding del
+        // contenido (pad.calculateTopPadding()), así que el Row de abajo (marcado como
+        // hazeSource) nunca llegaba a dibujar nada detrás de la barra de estado real —
+        // por eso StatusScrim no tenía contenido variable que difuminar y el fix anterior
+        // no se notaba. Excluimos el lado Top acá para que el contenido pueda extenderse
+        // hasta el borde físico superior; cada pantalla compensa ese hueco por su cuenta
+        // con su propio padding/spacer de status bar (ver HomePane, AboutPane, LogPane,
+        // FolderPickerScreen), igual que hace #app en el WebUI.
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
         snackbarHost = {
             snack?.let {
                 Snackbar(
@@ -848,6 +857,11 @@ private fun HomePane(
             Column(
                 Modifier.weight(0.42f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(end = 8.dp)
             ) {
+                // Este Spacer reemplaza el padding top que antes ponía Scaffold: al vivir
+                // DENTRO del contenido scrolleable (y no en el Row exterior), desaparece a
+                // medida que se scrollea, dejando que las cards sigan de largo por detrás
+                // de la barra de estado transparente y se difuminen ahí.
+                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                 HomeHeader()
                 Spacer(Modifier.height(16.dp))
                 StorageHero(volumes, playToken, onRefreshStorage)
@@ -858,6 +872,7 @@ private fun HomePane(
             Column(
                 Modifier.weight(0.58f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 8.dp)
             ) {
+                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                 BindList(entries, onDelete)
                 Spacer(Modifier.height(80.dp))
             }
@@ -866,6 +881,7 @@ private fun HomePane(
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
         ) {
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
             Spacer(Modifier.height(12.dp))
             HomeHeader()
             Spacer(Modifier.height(20.dp))
@@ -1190,6 +1206,7 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
     ) {
+        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         Spacer(Modifier.height(12.dp))
         Text(stringResource(R.string.about), color = cs.onBackground, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(20.dp))
@@ -1306,7 +1323,10 @@ private fun AboutMiniCard(modifier: Modifier, icon: ImageVector, title: String, 
 @Composable
 private fun LogPane(log: String) {
     val cs = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxSize().padding(20.dp)) {
+    // El título de este pane no scrollea (solo el Box del log lo hace por dentro), así que
+    // acá sí corresponde empujarlo con statusBarsPadding — a diferencia de StatusScrim, este
+    // Column SÍ tiene contenido real que debe correrse, no es una capa vacía.
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(20.dp)) {
         Text(stringResource(R.string.log), color = cs.onBackground, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
         Box(
@@ -1351,7 +1371,7 @@ private fun FolderPickerScreen(
     }
     LaunchedEffect(current) { load(current) }
 
-    Column(Modifier.fillMaxSize().background(cs.background)) {
+    Column(Modifier.fillMaxSize().background(cs.background).statusBarsPadding()) {
         Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, null, tint = cs.onBackground)
