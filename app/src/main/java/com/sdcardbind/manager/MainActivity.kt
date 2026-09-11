@@ -293,15 +293,6 @@ fun BindApp() {
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = cs.background,
-        // Por defecto Scaffold reserva el alto de la barra de estado como padding del
-        // contenido (pad.calculateTopPadding()), así que el Row de abajo (marcado como
-        // hazeSource) nunca llegaba a dibujar nada detrás de la barra de estado real —
-        // por eso StatusScrim no tenía contenido variable que difuminar y el fix anterior
-        // no se notaba. Excluimos el lado Top acá para que el contenido pueda extenderse
-        // hasta el borde físico superior; cada pantalla compensa ese hueco por su cuenta
-        // con su propio padding/spacer de status bar (ver HomePane, AboutPane, LogPane,
-        // FolderPickerScreen), igual que hace #app en el WebUI.
-        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
         snackbarHost = {
             snack?.let {
                 Snackbar(
@@ -462,16 +453,8 @@ fun BindApp() {
     // El pill vive FUERA del Scaffold (ya no es bottomBar), flotando encima del contenido.
     // Así, cuando el usuario scrollea, las cards pasan físicamente por detrás y se alcanzan
     // a ver a través de su fondo semitransparente — no un color opaco tapando todo.
-    AnimatedVisibility(
-        visible = screen == "tabs" && rootOk == true,
-        enter = fadeIn(),
-        exit = fadeOut(),
-        modifier = Modifier.align(Alignment.TopCenter)
-    ) {
-        // Espejo de NavScrim pero arriba: difumina el contenido que pasa por detrás de la
-        // barra de estado transparente, en vez de que se corte en seco contra ella.
-        StatusScrim(hazeState = hazeState)
-    }
+    // (Se sacó el scrim/blur de la barra de estado: terminaba difuminando también el título
+    // y el resto del contenido que queda pegado arriba, en vez de solo lo que pasa detrás.)
     AnimatedVisibility(
         visible = screen == "tabs" && rootOk == true,
         enter = fadeIn(),
@@ -616,53 +599,13 @@ private val pillSpring = spring<Float>(
 )
 
 /**
- * Espejo de `NavScrim` para la barra de estado: mismo criterio de difuminado que el
- * `.status-scrim` del WebUI, para que el contenido se desvanezca bajo la barra transparente
- * en vez de cortar en seco contra ella.
- *
- * El degradado de base (`Brush.verticalGradient`) SIEMPRE se ve, sin depender de Haze: el
- * blur real (`hazeEffect`) requiere Android 12+ (RenderEffect) y es solo un extra encima en
- * los equipos que lo soportan. Así, en un teléfono más viejo esto sigue siendo un degradado
- * y no una franja sólida.
- */
-@Composable
-private fun StatusScrim(hazeState: HazeState) {
-    val cs = MaterialTheme.colorScheme
-    val darkTheme = isSystemInDarkTheme()
-    val scrimTint = if (darkTheme) Color.Black else Color.White
-    Box(
-        Modifier
-            .fillMaxWidth()
-            // El fondo/blur deben pintar la franja completa, incluyendo el área física de la
-            // barra de estado — por eso NO llevan .statusBarsPadding() antes: ese modificador
-            // reserva ese espacio como padding vacío y empuja el degradado por debajo de la
-            // barra, dejándola sin difuminar. En vez de padding, sumamos la altura real de la
-            // barra de estado a la altura fija del box, para que el degradado siga arrancando
-            // arriba del todo y con el mismo margen visual de antes debajo de ella.
-            .height(120.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(cs.background.copy(alpha = 0.92f), Color.Transparent)
-                )
-            )
-            .hazeEffect(state = hazeState) {
-                blurRadius = 24.dp
-                tints = listOf(HazeTint(scrimTint.copy(alpha = 0.32f)))
-                // Se desvanece hacia abajo: completo junto a la barra de estado, transparente
-                // hacia el contenido — al revés del mask de NavScrim.
-                mask = Brush.verticalGradient(colors = listOf(Color.Black, Color.Transparent))
-            }
-    )
-}
-
-/**
  * Capa de difuminado que vive FUERA/DETRÁS del pill (nunca dentro de él). Lee el contenido
  * marcado con `hazeSource` en el Scaffold y lo dibuja blureado y atenuado hacia arriba,
  * igual que el `.nav-scrim` del WebUI: sin esto, el pill quedaría flotando sin transición
  * hacia el contenido que tiene detrás.
  *
- * Mismo criterio que en `StatusScrim`: el degradado de base no depende de que Haze pueda
- * blurear (Android 12+); el blur es un extra, no el único efecto.
+ * El degradado de base no depende de que Haze pueda blurear (Android 12+); el blur es un
+ * extra, no el único efecto.
  */
 @Composable
 private fun NavScrim(hazeState: HazeState) {
@@ -857,11 +800,6 @@ private fun HomePane(
             Column(
                 Modifier.weight(0.42f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(end = 8.dp)
             ) {
-                // Este Spacer reemplaza el padding top que antes ponía Scaffold: al vivir
-                // DENTRO del contenido scrolleable (y no en el Row exterior), desaparece a
-                // medida que se scrollea, dejando que las cards sigan de largo por detrás
-                // de la barra de estado transparente y se difuminen ahí.
-                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                 HomeHeader()
                 Spacer(Modifier.height(16.dp))
                 StorageHero(volumes, playToken, onRefreshStorage)
@@ -872,7 +810,6 @@ private fun HomePane(
             Column(
                 Modifier.weight(0.58f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 8.dp)
             ) {
-                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                 BindList(entries, onDelete)
                 Spacer(Modifier.height(80.dp))
             }
@@ -881,7 +818,6 @@ private fun HomePane(
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
         ) {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
             Spacer(Modifier.height(12.dp))
             HomeHeader()
             Spacer(Modifier.height(20.dp))
@@ -1206,7 +1142,6 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
     ) {
-        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         Spacer(Modifier.height(12.dp))
         Text(stringResource(R.string.about), color = cs.onBackground, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(20.dp))
@@ -1323,10 +1258,7 @@ private fun AboutMiniCard(modifier: Modifier, icon: ImageVector, title: String, 
 @Composable
 private fun LogPane(log: String) {
     val cs = MaterialTheme.colorScheme
-    // El título de este pane no scrollea (solo el Box del log lo hace por dentro), así que
-    // acá sí corresponde empujarlo con statusBarsPadding — a diferencia de StatusScrim, este
-    // Column SÍ tiene contenido real que debe correrse, no es una capa vacía.
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(20.dp)) {
+    Column(Modifier.fillMaxSize().padding(20.dp)) {
         Text(stringResource(R.string.log), color = cs.onBackground, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
         Box(
@@ -1371,7 +1303,7 @@ private fun FolderPickerScreen(
     }
     LaunchedEffect(current) { load(current) }
 
-    Column(Modifier.fillMaxSize().background(cs.background).statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(cs.background)) {
         Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, null, tint = cs.onBackground)
