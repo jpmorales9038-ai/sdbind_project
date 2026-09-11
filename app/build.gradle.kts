@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.sdcardbind.manager"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.sdcardbind.manager"
@@ -61,7 +61,7 @@ kotlin {
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
+    val composeBom = platform("androidx.compose:compose-bom:2025.12.00")
     implementation(composeBom)
 
     implementation("androidx.core:core-ktx:1.13.1")
