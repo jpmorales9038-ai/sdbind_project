@@ -472,6 +472,7 @@ fun BindApp() {
         exit = scaleOut() + fadeOut(),
         modifier = Modifier
             .align(Alignment.BottomEnd)
+            .navigationBarsPadding()
             .padding(bottom = 84.dp, end = 16.dp)
     ) {
         FloatingActionButton(
@@ -485,6 +486,7 @@ fun BindApp() {
         Snackbar(
             Modifier
                 .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
                 .padding(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 16.dp),
             containerColor = cs.inverseSurface,
             contentColor = cs.inverseOnSurface
