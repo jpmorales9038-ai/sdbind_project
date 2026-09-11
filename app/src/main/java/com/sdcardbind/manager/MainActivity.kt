@@ -44,7 +44,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -69,10 +68,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
@@ -565,14 +561,13 @@ private val pillSpring = spring<Float>(
 @Composable
 private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    // Colores del pill derivados del esquema dinámico (Material Expressive), en vez de un verde fijo.
-    val pillGlass = cs.surfaceContainerHigh.copy(alpha = 0.46f)
-    val pillHighlight = Color.White.copy(alpha = 0.14f)
-    val blobPrimary = cs.primary
-    val blobSecondary = cs.tertiary
-    val thumbColor = cs.primaryContainer.copy(alpha = 0.92f)
-    val inkOn = cs.onPrimaryContainer
-    val inkOff = cs.onSurfaceVariant
+    // Colores del pill 100% dinámicos (Material Expressive) y opacos, sin cristal ni blur:
+    // la cápsula usa el tono "container" (más oscuro/neutro) y el thumb activo el tono
+    // "primary" (más claro/vivo), igual que la referencia — solo que fijos ya no, dinámicos.
+    val pillOuter = cs.primaryContainer
+    val thumbColor = cs.primary
+    val inkOn = cs.onPrimary
+    val inkOff = cs.onPrimaryContainer
     val labels = listOf(
         stringResource(R.string.tab_home),
         stringResource(R.string.tab_log),
@@ -616,98 +611,64 @@ private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
             Modifier
                 .height(68.dp)
                 .clip(CircleShape)
+                .background(pillOuter)
+                .padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
-            // Fondo "fume": manchas de color del tema dinámico, difuminadas, tras un cristal translúcido.
-            // (Modifier.blur no tiene efecto por debajo de Android 12; en esos casos queda el cristal
-            // translúcido de abajo como respaldo, igual que el fallback sin backdrop-filter de la WebUI).
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .blur(radius = 34.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
-            ) {
+            Box(Modifier.height(52.dp), contentAlignment = Alignment.CenterStart) {
+                val density = LocalDensity.current
                 Box(
                     Modifier
-                        .size(120.dp)
-                        .align(Alignment.CenterStart)
-                        .offset(x = (-28).dp)
-                        .background(
-                            Brush.radialGradient(
-                                listOf(blobPrimary.copy(alpha = 0.85f), blobPrimary.copy(alpha = 0f))
-                            )
-                        )
+                        .offset { IntOffset(thumbX.value.roundToInt(), 0) }
+                        .width(with(density) { thumbW.value.toDp() })
+                        .fillMaxHeight()
+                        .clip(CircleShape)
+                        .background(thumbColor)
                 )
-                Box(
-                    Modifier
-                        .size(120.dp)
-                        .align(Alignment.CenterEnd)
-                        .offset(x = 28.dp)
-                        .background(
-                            Brush.radialGradient(
-                                listOf(blobSecondary.copy(alpha = 0.75f), blobSecondary.copy(alpha = 0f))
+                Row(
+                    Modifier.fillMaxHeight(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tabs.forEachIndexed { i, tab ->
+                        val on = selected == i
+                        val tint by animateColorAsState(if (on) inkOn else inkOff, label = "navTint")
+                        Row(
+                            Modifier
+                                .onGloballyPositioned { c ->
+                                    val x = c.positionInParent().x
+                                    val w = c.size.width.toFloat()
+                                    if (pos[i] != x) pos[i] = x
+                                    if (widths[i] != w) widths[i] = w
+                                }
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { onTab(tab) }
+                                .padding(horizontal = 18.dp)
+                                .fillMaxHeight(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                icons[i],
+                                contentDescription = labels[i],
+                                tint = tint,
+                                modifier = Modifier.size(24.dp)
                             )
-                        )
-                )
-            }
-            Box(Modifier.matchParentSize().background(pillGlass))
-            Box(Modifier.matchParentSize().border(1.dp, pillHighlight, CircleShape))
-
-            Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
-                Box(Modifier.height(52.dp), contentAlignment = Alignment.CenterStart) {
-                    val density = LocalDensity.current
-                    Box(
-                        Modifier
-                            .offset { IntOffset(thumbX.value.roundToInt(), 0) }
-                            .width(with(density) { thumbW.value.toDp() })
-                            .fillMaxHeight()
-                            .clip(CircleShape)
-                            .background(thumbColor)
-                    )
-                    Row(
-                        Modifier.fillMaxHeight(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        tabs.forEachIndexed { i, tab ->
-                            val on = selected == i
-                            val tint by animateColorAsState(if (on) inkOn else inkOff, label = "navTint")
-                            Row(
-                                Modifier
-                                    .onGloballyPositioned { c ->
-                                        val x = c.positionInParent().x
-                                        val w = c.size.width.toFloat()
-                                        if (pos[i] != x) pos[i] = x
-                                        if (widths[i] != w) widths[i] = w
-                                    }
-                                    .clip(CircleShape)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) { onTab(tab) }
-                                    .padding(horizontal = 18.dp)
-                                    .fillMaxHeight(),
-                                verticalAlignment = Alignment.CenterVertically
+                            AnimatedVisibility(
+                                visible = on,
+                                enter = fadeIn(tween(220)) + expandHorizontally(animationSpec = pillSizeSpring),
+                                exit = fadeOut(tween(160)) + shrinkHorizontally(animationSpec = pillSizeSpring)
                             ) {
-                                Icon(
-                                    icons[i],
-                                    contentDescription = labels[i],
-                                    tint = tint,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                AnimatedVisibility(
-                                    visible = on,
-                                    enter = fadeIn(tween(220)) + expandHorizontally(animationSpec = pillSizeSpring),
-                                    exit = fadeOut(tween(160)) + shrinkHorizontally(animationSpec = pillSizeSpring)
-                                ) {
-                                    Row {
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            labels[i],
-                                            color = tint,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 16.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Clip
-                                        )
-                                    }
+                                Row {
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        labels[i],
+                                        color = tint,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 16.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Clip
+                                    )
                                 }
                             }
                         }
