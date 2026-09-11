@@ -1,3 +1,4 @@
+@import "https://mui.kernelsu.org/internal/insets.css";
 :root {
   --bg: #131318;
   --text: #e4e1e6;
@@ -44,8 +45,31 @@ body, button, input {
   font-family: GSR, "Google Sans Rounded", "Google Sans", sans-serif;
 }
 * { box-sizing: border-box; }
-#app { padding: 16px 20px calc(var(--bottom-h) + 28px); min-height: 100vh; }
-.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+#app {
+  padding: calc(16px + var(--window-inset-top, 24px)) 20px
+    calc(var(--bottom-h) + 28px + var(--window-inset-bottom, 24px));
+  min-height: 100vh;
+}
+.status-scrim {
+  position: fixed; left: 0; right: 0; top: 0;
+  height: calc(var(--window-inset-top, 24px) + 56px);
+  pointer-events: none;
+  z-index: 11;
+  -webkit-backdrop-filter: blur(20px) saturate(130%);
+  backdrop-filter: blur(20px) saturate(130%);
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--scrim-tint) 60%, transparent) 0%,
+    color-mix(in srgb, var(--scrim-tint) 32%, transparent) 55%,
+    transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
+  transition: background .4s ease;
+}
+.top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+  position: relative; z-index: 13;
+}
 h1 { font-size: 32px; margin: 0; font-weight: 700; }
 .badge {
   border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700;
@@ -138,7 +162,8 @@ h2 { font-size: 18px; margin: 0 0 12px; }
 .actions { display: flex; flex-direction: column; gap: 4px; }
 
 .fab {
-  position: fixed; right: 20px; bottom: calc(var(--bottom-h) + 8px);
+  position: fixed; right: 20px;
+  bottom: calc(var(--bottom-h) + 8px + var(--window-inset-bottom, 24px));
   width: 56px; height: 56px; border-radius: 50%;
   border: 0; background: var(--primary); color: var(--on-primary);
   font-size: 28px; line-height: 1; cursor: pointer;
@@ -146,7 +171,7 @@ h2 { font-size: 18px; margin: 0 0 12px; }
 
 .nav-scrim {
   position: fixed; left: 0; right: 0; bottom: 0;
-  height: calc(var(--bottom-h) + 56px);
+  height: calc(var(--bottom-h) + 56px + var(--window-inset-bottom, 24px));
   pointer-events: none;
   z-index: 11;
   -webkit-backdrop-filter: blur(24px) saturate(130%);
@@ -162,7 +187,7 @@ h2 { font-size: 18px; margin: 0 0 12px; }
 .bottom {
   position: fixed; left: 0; right: 0; bottom: 0;
   display: flex; justify-content: center;
-  padding: 10px 20px 18px;
+  padding: 10px 20px calc(18px + var(--window-inset-bottom, 24px));
   background: transparent;
   pointer-events: none;
   z-index: 12;
