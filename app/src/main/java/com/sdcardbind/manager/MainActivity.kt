@@ -610,9 +610,15 @@ private val pillSpring = spring<Float>(
  * Espejo de `NavScrim` para la barra de estado: mismo criterio de difuminado que el
  * `.status-scrim` del WebUI, para que el contenido se desvanezca bajo la barra transparente
  * en vez de cortar en seco contra ella.
+ *
+ * El degradado de base (`Brush.verticalGradient`) SIEMPRE se ve, sin depender de Haze: el
+ * blur real (`hazeEffect`) requiere Android 12+ (RenderEffect) y es solo un extra encima en
+ * los equipos que lo soportan. Así, en un teléfono más viejo esto sigue siendo un degradado
+ * y no una franja sólida.
  */
 @Composable
 private fun StatusScrim(hazeState: HazeState) {
+    val cs = MaterialTheme.colorScheme
     val darkTheme = isSystemInDarkTheme()
     val scrimTint = if (darkTheme) Color.Black else Color.White
     Box(
@@ -620,6 +626,11 @@ private fun StatusScrim(hazeState: HazeState) {
             .fillMaxWidth()
             .height(120.dp)
             .statusBarsPadding()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(cs.background.copy(alpha = 0.92f), Color.Transparent)
+                )
+            )
             .hazeEffect(state = hazeState) {
                 blurRadius = 24.dp
                 tints = listOf(HazeTint(scrimTint.copy(alpha = 0.32f)))
@@ -635,9 +646,13 @@ private fun StatusScrim(hazeState: HazeState) {
  * marcado con `hazeSource` en el Scaffold y lo dibuja blureado y atenuado hacia arriba,
  * igual que el `.nav-scrim` del WebUI: sin esto, el pill quedaría flotando sin transición
  * hacia el contenido que tiene detrás.
+ *
+ * Mismo criterio que en `StatusScrim`: el degradado de base no depende de que Haze pueda
+ * blurear (Android 12+); el blur es un extra, no el único efecto.
  */
 @Composable
 private fun NavScrim(hazeState: HazeState) {
+    val cs = MaterialTheme.colorScheme
     val darkTheme = isSystemInDarkTheme()
     // Blanco en modo claro, negro en modo oscuro — el mismo criterio que --scrim-tint en CSS.
     val scrimTint = if (darkTheme) Color.Black else Color.White
@@ -646,6 +661,11 @@ private fun NavScrim(hazeState: HazeState) {
             .fillMaxWidth()
             .height(168.dp)
             .navigationBarsPadding()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color.Transparent, cs.background.copy(alpha = 0.92f))
+                )
+            )
             .hazeEffect(state = hazeState) {
                 blurRadius = 24.dp
                 tints = listOf(HazeTint(scrimTint.copy(alpha = 0.32f)))
@@ -655,6 +675,7 @@ private fun NavScrim(hazeState: HazeState) {
             }
     )
 }
+
 
 @Composable
 private fun BottomNav(hazeState: HazeState, pagerState: PagerState, onTab: (Tab) -> Unit) {

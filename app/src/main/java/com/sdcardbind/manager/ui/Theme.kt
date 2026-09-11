@@ -55,6 +55,7 @@ fun AppTheme(content: @Composable () -> Unit) {
                 // ponemos nosotros (algunos fabricantes lo hacen incluso con colores opacos,
                 // y eso lava el tinte hasta que se ve casi blanco).
                 window.isNavigationBarContrastEnforced = false
+                window.isStatusBarContrastEnforced = false
             }
             // Transparente en ambos temas: el color real de esa zona ya lo ponen NavScrim +
             // el pill (difuminado + tinte adaptativo), igual que en el WebUI. Forzar aquí un
