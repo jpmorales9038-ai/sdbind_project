@@ -360,6 +360,7 @@ function switchTab(tab) {
   }
   document.getElementById("homePane").className = tab === "home" ? "pane-binds" : "pane-binds hidden";
   document.querySelector(".pane-storage").className = tab === "home" ? "pane-storage" : "pane-storage hidden";
+  document.querySelector(".pane-actions").className = tab === "home" ? "pane-actions" : "pane-actions hidden";
   document.getElementById("logPane").className = tab === "log" ? "pane-log" : "pane-log hidden";
   var about = document.getElementById("aboutPane");
   if (about) about.className = tab === "about" ? "pane-about" : "pane-about hidden";
