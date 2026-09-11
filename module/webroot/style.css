@@ -44,6 +44,18 @@ html, body { margin: 0; background: var(--bg); color: var(--text); }
 body, button, input {
   font-family: GSR, "Google Sans Rounded", "Google Sans", sans-serif;
 }
+html { -webkit-tap-highlight-color: transparent; }
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-user-select: none; user-select: none;
+}
+button:focus,
+button:focus-visible,
+a:focus,
+a:focus-visible {
+  outline: none;
+}
 * { box-sizing: border-box; }
 #app {
   padding: calc(16px + var(--window-inset-top, 24px)) 20px
@@ -235,6 +247,7 @@ h2 { font-size: 18px; margin: 0 0 12px; }
 .navchip.on .nav-lab {
   max-width: 160px; opacity: 1;
 }
+.navchip:active { opacity: .72; }
 
 .log {
   background: #120c10; color: var(--ok);
