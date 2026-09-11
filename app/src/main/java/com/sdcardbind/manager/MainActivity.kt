@@ -44,6 +44,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -68,7 +69,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
@@ -553,9 +557,6 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
     }
 }
 
-private val PillLime = Color(0xFFC6F24A)
-private val PillInner = Color(0xFFEAF88E)
-private val PillInk = Color(0xFF24350C)
 private val pillSpring = spring<Float>(
     dampingRatio = 0.82f,
     stiffness = 380f
@@ -563,6 +564,15 @@ private val pillSpring = spring<Float>(
 
 @Composable
 private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    // Colores del pill derivados del esquema dinámico (Material Expressive), en vez de un verde fijo.
+    val pillGlass = cs.surfaceContainerHigh.copy(alpha = 0.46f)
+    val pillHighlight = Color.White.copy(alpha = 0.14f)
+    val blobPrimary = cs.primary
+    val blobSecondary = cs.tertiary
+    val thumbColor = cs.primaryContainer.copy(alpha = 0.92f)
+    val inkOn = cs.onPrimaryContainer
+    val inkOff = cs.onSurfaceVariant
     val labels = listOf(
         stringResource(R.string.tab_home),
         stringResource(R.string.tab_log),
@@ -606,63 +616,98 @@ private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
             Modifier
                 .height(68.dp)
                 .clip(CircleShape)
-                .background(PillLime)
-                .padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
-            Box(Modifier.height(52.dp), contentAlignment = Alignment.CenterStart) {
-                val density = LocalDensity.current
+            // Fondo "fume": manchas de color del tema dinámico, difuminadas, tras un cristal translúcido.
+            // (Modifier.blur no tiene efecto por debajo de Android 12; en esos casos queda el cristal
+            // translúcido de abajo como respaldo, igual que el fallback sin backdrop-filter de la WebUI).
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .blur(radius = 34.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+            ) {
                 Box(
                     Modifier
-                        .offset { IntOffset(thumbX.value.roundToInt(), 0) }
-                        .width(with(density) { thumbW.value.toDp() })
-                        .fillMaxHeight()
-                        .clip(CircleShape)
-                        .background(PillInner)
-                )
-                Row(
-                    Modifier.fillMaxHeight(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    tabs.forEachIndexed { i, tab ->
-                        val on = selected == i
-                        Row(
-                            Modifier
-                                .onGloballyPositioned { c ->
-                                    val x = c.positionInParent().x
-                                    val w = c.size.width.toFloat()
-                                    if (pos[i] != x) pos[i] = x
-                                    if (widths[i] != w) widths[i] = w
-                                }
-                                .clip(CircleShape)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) { onTab(tab) }
-                                .padding(horizontal = 18.dp)
-                                .fillMaxHeight(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                icons[i],
-                                contentDescription = labels[i],
-                                tint = PillInk,
-                                modifier = Modifier.size(24.dp)
+                        .size(120.dp)
+                        .align(Alignment.CenterStart)
+                        .offset(x = (-28).dp)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(blobPrimary.copy(alpha = 0.85f), blobPrimary.copy(alpha = 0f))
                             )
-                            AnimatedVisibility(
-                                visible = on,
-                                enter = fadeIn(tween(220)) + expandHorizontally(animationSpec = pillSizeSpring),
-                                exit = fadeOut(tween(160)) + shrinkHorizontally(animationSpec = pillSizeSpring)
+                        )
+                )
+                Box(
+                    Modifier
+                        .size(120.dp)
+                        .align(Alignment.CenterEnd)
+                        .offset(x = 28.dp)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(blobSecondary.copy(alpha = 0.75f), blobSecondary.copy(alpha = 0f))
+                            )
+                        )
+                )
+            }
+            Box(Modifier.matchParentSize().background(pillGlass))
+            Box(Modifier.matchParentSize().border(1.dp, pillHighlight, CircleShape))
+
+            Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                Box(Modifier.height(52.dp), contentAlignment = Alignment.CenterStart) {
+                    val density = LocalDensity.current
+                    Box(
+                        Modifier
+                            .offset { IntOffset(thumbX.value.roundToInt(), 0) }
+                            .width(with(density) { thumbW.value.toDp() })
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(thumbColor)
+                    )
+                    Row(
+                        Modifier.fillMaxHeight(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        tabs.forEachIndexed { i, tab ->
+                            val on = selected == i
+                            val tint by animateColorAsState(if (on) inkOn else inkOff, label = "navTint")
+                            Row(
+                                Modifier
+                                    .onGloballyPositioned { c ->
+                                        val x = c.positionInParent().x
+                                        val w = c.size.width.toFloat()
+                                        if (pos[i] != x) pos[i] = x
+                                        if (widths[i] != w) widths[i] = w
+                                    }
+                                    .clip(CircleShape)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) { onTab(tab) }
+                                    .padding(horizontal = 18.dp)
+                                    .fillMaxHeight(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row {
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        labels[i],
-                                        color = PillInk,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 16.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Clip
-                                    )
+                                Icon(
+                                    icons[i],
+                                    contentDescription = labels[i],
+                                    tint = tint,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                AnimatedVisibility(
+                                    visible = on,
+                                    enter = fadeIn(tween(220)) + expandHorizontally(animationSpec = pillSizeSpring),
+                                    exit = fadeOut(tween(160)) + shrinkHorizontally(animationSpec = pillSizeSpring)
+                                ) {
+                                    Row {
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            labels[i],
+                                            color = tint,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 16.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Clip
+                                        )
+                                    }
                                 }
                             }
                         }
