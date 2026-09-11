@@ -457,6 +457,16 @@ fun BindApp() {
         visible = screen == "tabs" && rootOk == true,
         enter = fadeIn(),
         exit = fadeOut(),
+        modifier = Modifier.align(Alignment.TopCenter)
+    ) {
+        // Espejo de NavScrim pero arriba: difumina el contenido que pasa por detrás de la
+        // barra de estado transparente, en vez de que se corte en seco contra ella.
+        StatusScrim(hazeState = hazeState)
+    }
+    AnimatedVisibility(
+        visible = screen == "tabs" && rootOk == true,
+        enter = fadeIn(),
+        exit = fadeOut(),
         modifier = Modifier.align(Alignment.BottomCenter)
     ) {
         // El scrim va DETRÁS del pill (se declara primero): difumina el contenido que pasa
@@ -595,6 +605,30 @@ private val pillSpring = spring<Float>(
     dampingRatio = 0.82f,
     stiffness = 380f
 )
+
+/**
+ * Espejo de `NavScrim` para la barra de estado: mismo criterio de difuminado que el
+ * `.status-scrim` del WebUI, para que el contenido se desvanezca bajo la barra transparente
+ * en vez de cortar en seco contra ella.
+ */
+@Composable
+private fun StatusScrim(hazeState: HazeState) {
+    val darkTheme = isSystemInDarkTheme()
+    val scrimTint = if (darkTheme) Color.Black else Color.White
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(120.dp)
+            .statusBarsPadding()
+            .hazeEffect(state = hazeState) {
+                blurRadius = 24.dp
+                tints = listOf(HazeTint(scrimTint.copy(alpha = 0.32f)))
+                // Se desvanece hacia abajo: completo junto a la barra de estado, transparente
+                // hacia el contenido — al revés del mask de NavScrim.
+                mask = Brush.verticalGradient(colors = listOf(Color.Black, Color.Transparent))
+            }
+    )
+}
 
 /**
  * Capa de difuminado que vive FUERA/DETRÁS del pill (nunca dentro de él). Lee el contenido

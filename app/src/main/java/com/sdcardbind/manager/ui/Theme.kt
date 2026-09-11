@@ -56,14 +56,10 @@ fun AppTheme(content: @Composable () -> Unit) {
                 // y eso lava el tinte hasta que se ve casi blanco).
                 window.isNavigationBarContrastEnforced = false
             }
-            // Barra de navegación teñida con la paleta Monet en ambos temas: negro sólido en
-            // oscuro, y `surfaceContainer` (mismo tono cálido que usan las tarjetas) en claro
-            // — usar `background` a secas queda casi blanco en muchas paletas dinámicas.
-            window.navigationBarColor = if (dark) {
-                android.graphics.Color.BLACK
-            } else {
-                colorScheme.surfaceContainer.toArgb()
-            }
+            // Transparente en ambos temas: el color real de esa zona ya lo ponen NavScrim +
+            // el pill (difuminado + tinte adaptativo), igual que en el WebUI. Forzar aquí un
+            // color sólido (como antes) tapaba ese degradado con una franja opaca.
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
         }
     }
 
