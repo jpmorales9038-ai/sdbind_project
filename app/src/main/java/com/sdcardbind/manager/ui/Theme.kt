@@ -37,16 +37,16 @@ fun AppTheme(content: @Composable () -> Unit) {
         dark -> darkColorScheme()
         else -> lightColorScheme()
     }
-    // A pedido: en tema oscuro se invierte qué tono cumple cada rol, intercambiando
-    // directamente background <-> surfaceContainer (el rol que usan la mayoría de las
-    // "stacks"/cards en el resto del archivo). Nada de tokens intermedios: eso fue lo que
-    // salió mal la primera vez (usar surfaceContainerHigh como "el negro" asumiendo que era
-    // más oscuro que surfaceContainer, cuando en esta paleta no lo es). Comparamos luminancia
-    // real antes de intercambiar, por si en algún dispositivo/wallpaper el fondo original ya
-    // sale más oscuro que las cards — así nunca queda al revés sin importar cómo calcule los
-    // tonos ese dynamicDarkColorScheme en particular. surfaceContainerHigh (lo que usa el pill)
-    // no se toca en ningún caso.
-    val colorScheme = if (dark && baseColorScheme.background.luminance() > baseColorScheme.surfaceContainer.luminance()) {
+    // A pedido: se invierte qué tono cumple cada rol, intercambiando directamente
+    // background <-> surfaceContainer (el rol que usan la mayoría de las "stacks"/cards en el
+    // resto del archivo) — quieren el fondo más oscuro que las cards, en los dos temas, igual
+    // que en la referencia. Nada de tokens intermedios: eso fue lo que salió mal la primera vez
+    // (usar surfaceContainerHigh como "el negro" asumiendo que era más oscuro que
+    // surfaceContainer, cuando en esta paleta no lo es). Comparamos luminancia real antes de
+    // intercambiar — si el fondo original ya sale más oscuro que las cards (en cualquiera de
+    // los dos temas, según wallpaper/dispositivo) no hace falta tocar nada. Aplica en claro y
+    // en oscuro por igual. surfaceContainerHigh (lo que usa el pill) no se toca en ningún caso.
+    val colorScheme = if (baseColorScheme.background.luminance() > baseColorScheme.surfaceContainer.luminance()) {
         baseColorScheme.copy(
             background = baseColorScheme.surfaceContainer,
             surface = baseColorScheme.surfaceContainer,
