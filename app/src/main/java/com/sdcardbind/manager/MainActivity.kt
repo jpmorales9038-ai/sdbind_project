@@ -124,7 +124,33 @@ class MainActivity : ComponentActivity() {
             )
         )
         setContent {
-            AppTheme { BindApp() }
+            AppTheme {
+                // SystemBarStyle.auto() nunca deja pintar un fondo sólido en la barra de
+                // navegación real en Android 10+ (queda siempre transparente ahí, sin importar
+                // qué color le pasemos — así lo documenta Android). Para que quede negra de
+                // verdad en tema oscuro hace falta SystemBarStyle.dark(NEGRO), que sí fuerza un
+                // fondo sólido propio en vez de depender de que el contenido de la app la tape.
+                // En tema claro se deja como estaba (transparente).
+                val darkTheme = isSystemInDarkTheme()
+                DisposableEffect(darkTheme) {
+                    enableEdgeToEdge(
+                        statusBarStyle = SystemBarStyle.auto(
+                            android.graphics.Color.TRANSPARENT,
+                            android.graphics.Color.TRANSPARENT
+                        ),
+                        navigationBarStyle = if (darkTheme) {
+                            SystemBarStyle.dark(android.graphics.Color.BLACK)
+                        } else {
+                            SystemBarStyle.auto(
+                                android.graphics.Color.TRANSPARENT,
+                                android.graphics.Color.TRANSPARENT
+                            )
+                        }
+                    )
+                    onDispose {}
+                }
+                BindApp()
+            }
         }
     }
 }
@@ -613,6 +639,10 @@ private fun NavScrim(hazeState: HazeState) {
     val darkTheme = isSystemInDarkTheme()
     // Blanco en modo claro, negro en modo oscuro — el mismo criterio que --scrim-tint en CSS.
     val scrimTint = if (darkTheme) Color.Black else Color.White
+    // En modo oscuro el degradado va a negro puro (no a cs.background, que en Monet suele
+    // quedar gris oscuro, no negro) para que se funda con el pill, que también es negro puro
+    // ahí abajo — así quedan camuflados en vez de notarse el borde entre los dos.
+    val scrimBase = if (darkTheme) Color.Black else cs.background
     Box(
         Modifier
             .fillMaxWidth()
@@ -624,7 +654,7 @@ private fun NavScrim(hazeState: HazeState) {
             .height(168.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color.Transparent, cs.background.copy(alpha = 0.92f))
+                    colors = listOf(Color.Transparent, scrimBase.copy(alpha = 0.94f))
                 )
             )
             .hazeEffect(state = hazeState) {
