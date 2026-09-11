@@ -71,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -573,6 +574,13 @@ private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
     val pillOuter = remember(cs.primaryContainer) {
         lerp(Color.Black, cs.primaryContainer, 0.6f).copy(alpha = 0.5f)
     }
+    // Degradado negro breve encima del semitransparente: solo se nota cerca del borde
+    // superior y se disuelve rápido, dando la misma profundidad sutil de la referencia
+    // sin oscurecer todo el pill.
+    val pillShade = Brush.verticalGradient(
+        0f to Color.Black.copy(alpha = 0.30f),
+        0.55f to Color.Transparent
+    )
     val thumbColor = cs.primary
     val inkOn = cs.onPrimary
     val inkOff = cs.onPrimaryContainer
@@ -620,6 +628,7 @@ private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
                 .height(68.dp)
                 .clip(CircleShape)
                 .background(pillOuter)
+                .background(pillShade)
                 .padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
             Box(Modifier.height(52.dp), contentAlignment = Alignment.CenterStart) {

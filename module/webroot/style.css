@@ -12,9 +12,9 @@
   --warn: #e8c07a;
   --radius: 28px;
   --bottom-h: 96px;
-  --pill-bg: rgba(197,192,255,.40);
-  --pill-thumb-bg: rgba(197,192,255,.86);
-  --pill-fg: rgba(28,26,48,.92);
+  --pill-bg: color-mix(in srgb, var(--primary) 40%, transparent);
+  --pill-thumb-bg: color-mix(in srgb, var(--primary) 86%, transparent);
+  --pill-fg: var(--on-primary);
   --pill-border: rgba(255,255,255,.22);
 }
 @media (prefers-color-scheme: light) {
