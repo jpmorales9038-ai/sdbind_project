@@ -569,16 +569,20 @@ private val pillSpring = spring<Float>(
 @Composable
 private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    // Fondo de la cápsula: color del tema oscurecido y con opacidad reducida (semitransparente
-    // plano, SIN blur/vidrio ni borde de contorno).
-    val pillOuter = remember(cs.primaryContainer) {
-        lerp(Color.Black, cs.primaryContainer, 0.6f).copy(alpha = 0.5f)
+    // Fondo de la cápsula: color sólido del tema (SIN transparencia, no deja ver contenido
+    // detrás) con un degradado propio para que no sea un tono plano.
+    val pillOuter = remember(cs.primaryContainer, cs.primary) {
+        Brush.linearGradient(
+            listOf(
+                lerp(cs.primaryContainer, Color.Black, 0.22f),
+                lerp(cs.primaryContainer, cs.primary, 0.35f)
+            )
+        )
     }
-    // Degradado negro breve encima del semitransparente: solo se nota cerca del borde
-    // superior y se disuelve rápido, dando la misma profundidad sutil de la referencia
-    // sin oscurecer todo el pill.
+    // Un segundo degradado, más breve, encima: aporta la profundidad de la referencia sin
+    // afectar la opacidad general (todo sigue siendo 100% sólido).
     val pillShade = Brush.verticalGradient(
-        0f to Color.Black.copy(alpha = 0.30f),
+        0f to Color.Black.copy(alpha = 0.22f),
         0.55f to Color.Transparent
     )
     val thumbColor = cs.primary
