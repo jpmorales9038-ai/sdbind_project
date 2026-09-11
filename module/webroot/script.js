@@ -595,6 +595,16 @@ function hslaCss(h, s, l, a) {
   return "hsla(" + Math.round(h) + ", " + Math.round(s) + "%, " + Math.round(l) + "%, " + a + ")";
 }
 
+// El WebView anfitrión (KernelSU Manager) pinta la barra de estado/navegación con este meta
+// tag, igual que en una PWA — sin esto, esas barras se quedan con el color por defecto del
+// host en vez de seguir la paleta Monet de la app.
+function syncSystemBarColor() {
+  var meta = document.getElementById("themeColorMeta");
+  if (!meta) return;
+  var bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (bg) meta.setAttribute("content", bg);
+}
+
 function applySeed(seed) {
   var rgb = hexToRgb(seed);
   if (!rgb) return;
@@ -604,7 +614,9 @@ function applySeed(seed) {
   var r = document.documentElement.style;
   function set(k, v) { r.setProperty(k, v); }
   if (dark) {
-    set("--bg", hslCss(h, 18, 8));
+    // Tono más oscuro de la escala tonal (equivalente al "background" de Material 3 dinámico),
+    // no un gris medio — así status bar / nav bar quedan casi negras pero con el matiz Monet.
+    set("--bg", hslCss(h, 18, 4));
     set("--text", hslCss(h, 12, 94));
     set("--muted", hslCss(h, 10, 70));
     set("--primary", hslCss(h, s, 80));
@@ -636,6 +648,7 @@ function applySeed(seed) {
     set("--pill-fg", hslaCss(h, 30, 16, 0.94));
     set("--pill-border", hslaCss(h, 24, 10, 0.14));
   }
+  syncSystemBarColor();
 }
 
 function injectCss(text) {
@@ -679,7 +692,7 @@ function loadThemeAndFont() {
     var jobs = [];
     if (hasCss) {
       jobs.push(sh("cat " + MODDIR + "/webroot/theme.css").then(function (c) {
-        if (c.stdout && c.stdout.indexOf("--primary") >= 0) injectCss(c.stdout);
+        if (c.stdout && c.stdout.indexOf("--primary") >= 0) { injectCss(c.stdout); syncSystemBarColor(); }
         else if (seed) applySeed(seed);
       }));
     } else if (seed) {

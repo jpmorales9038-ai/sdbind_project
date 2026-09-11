@@ -50,13 +50,19 @@ fun AppTheme(content: @Composable () -> Unit) {
             val window = (view.context as Activity).window
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !dark
             WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !dark
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Evita que el sistema dibuje un scrim de contraste encima del color que
+                // ponemos nosotros (algunos fabricantes lo hacen incluso con colores opacos,
+                // y eso lava el tinte hasta que se ve casi blanco).
+                window.isNavigationBarContrastEnforced = false
+            }
             // Barra de navegación teñida con la paleta Monet en ambos temas: negro sólido en
-            // oscuro, y el color de fondo dinámico en claro (evita el salto brusco de blanco
-            // puro al color de la app).
+            // oscuro, y `surfaceContainer` (mismo tono cálido que usan las tarjetas) en claro
+            // — usar `background` a secas queda casi blanco en muchas paletas dinámicas.
             window.navigationBarColor = if (dark) {
                 android.graphics.Color.BLACK
             } else {
-                colorScheme.background.toArgb()
+                colorScheme.surfaceContainer.toArgb()
             }
         }
     }
