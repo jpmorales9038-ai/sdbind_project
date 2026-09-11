@@ -45,6 +45,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -93,6 +94,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdcardbind.manager.ui.AppTheme
 import com.topjohnwu.superuser.Shell
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -281,13 +286,20 @@ fun BindApp() {
         else -> "tabs"
     }
 
+    // Un único HazeState conecta el contenido que scrollea (fuente) con el pill y el
+    // scrim flotantes (efectos): así el difuminado que se ve detrás del pill es el
+    // contenido real pasando por detrás, no un color plano.
+    val hazeState = remember { HazeState() }
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = cs.background,
         snackbarHost = {
             snack?.let {
                 Snackbar(
-                    Modifier.padding(16.dp),
+                    // El pill flota FUERA del Scaffold, así que el snackbar (nuestro "toast"
+                    // nativo) necesita este margen extra o queda tapado detrás — el mismo bug
+                    // que arreglamos en el WebUI.
+                    Modifier.padding(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 16.dp),
                     containerColor = cs.inverseSurface,
                     contentColor = cs.inverseOnSurface
                 ) { Text(it) }
@@ -312,7 +324,14 @@ fun BindApp() {
             }
         }
     ) { pad ->
-        Row(Modifier.fillMaxSize().padding(pad)) {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .padding(pad)
+                // Marca este contenido como la fuente que el scrim/pill van a leer y
+                // difuminar por detrás — el equivalente nativo del backdrop-filter del WebUI.
+                .hazeSource(state = hazeState)
+        ) {
             AnimatedContent(
                 targetState = screen,
                 modifier = Modifier.weight(1f),
@@ -436,11 +455,22 @@ fun BindApp() {
     // a ver a través de su fondo semitransparente — no un color opaco tapando todo.
     AnimatedVisibility(
         visible = screen == "tabs" && rootOk == true,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.align(Alignment.BottomCenter)
+    ) {
+        // El scrim va DETRÁS del pill (se declara primero): difumina el contenido que pasa
+        // por detrás, con un tinte blanco o negro según el tema — igual que en el WebUI —
+        // sin tocar el color sólido del pill.
+        NavScrim(hazeState = hazeState)
+    }
+    AnimatedVisibility(
+        visible = screen == "tabs" && rootOk == true,
         enter = slideInVertically { it } + fadeIn(),
         exit = slideOutVertically { it } + fadeOut(),
         modifier = Modifier.align(Alignment.BottomCenter)
     ) {
-        BottomNav(pagerState = pagerState, onTab = goTab)
+        BottomNav(hazeState = hazeState, pagerState = pagerState, onTab = goTab)
     }
     OtgConnectPopup(vol = otgPopup, onDismiss = { otgPopup = null })
     pendingDelete?.let { entry ->
@@ -566,25 +596,40 @@ private val pillSpring = spring<Float>(
     stiffness = 380f
 )
 
+/**
+ * Capa de difuminado que vive FUERA/DETRÁS del pill (nunca dentro de él). Lee el contenido
+ * marcado con `hazeSource` en el Scaffold y lo dibuja blureado y atenuado hacia arriba,
+ * igual que el `.nav-scrim` del WebUI: sin esto, el pill quedaría flotando sin transición
+ * hacia el contenido que tiene detrás.
+ */
 @Composable
-private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    // Fondo de la cápsula: color sólido del tema (SIN transparencia, no deja ver contenido
-    // detrás) con un degradado propio para que no sea un tono plano.
-    val pillOuter = remember(cs.primaryContainer, cs.primary) {
-        Brush.linearGradient(
-            listOf(
-                lerp(cs.primaryContainer, Color.Black, 0.22f),
-                lerp(cs.primaryContainer, cs.primary, 0.35f)
-            )
-        )
-    }
-    // Un segundo degradado, más breve, encima: aporta la profundidad de la referencia sin
-    // afectar la opacidad general (todo sigue siendo 100% sólido).
-    val pillShade = Brush.verticalGradient(
-        0f to Color.Black.copy(alpha = 0.22f),
-        0.55f to Color.Transparent
+private fun NavScrim(hazeState: HazeState) {
+    val darkTheme = isSystemInDarkTheme()
+    // Blanco en modo claro, negro en modo oscuro — el mismo criterio que --scrim-tint en CSS.
+    val scrimTint = if (darkTheme) Color.Black else Color.White
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(168.dp)
+            .navigationBarsPadding()
+            .hazeEffect(state = hazeState) {
+                blurRadius = 24.dp
+                tints = listOf(HazeTint(scrimTint.copy(alpha = 0.32f)))
+                // Se desvanece hacia arriba: transparente en el borde superior, completo
+                // hacia abajo, junto al pill — igual que el mask-image del CSS.
+                mask = Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black))
+            }
     )
+}
+
+@Composable
+private fun BottomNav(hazeState: HazeState, pagerState: PagerState, onTab: (Tab) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    // Fondo de la cápsula: UN solo color sólido y adaptativo (nada de degradados por dentro).
+    // El difuminado vive aparte, en NavScrim, por detrás del pill.
+    val pillSolid = remember(cs.surfaceContainerHigh, cs.primary) {
+        lerp(cs.surfaceContainerHigh, cs.primary, 0.08f)
+    }
     val thumbColor = cs.primary
     val inkOn = cs.onPrimary
     val inkOff = cs.onPrimaryContainer
@@ -631,8 +676,7 @@ private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
             Modifier
                 .height(68.dp)
                 .clip(CircleShape)
-                .background(pillOuter)
-                .background(pillShade)
+                .background(pillSolid)
                 .padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
             Box(Modifier.height(52.dp), contentAlignment = Alignment.CenterStart) {

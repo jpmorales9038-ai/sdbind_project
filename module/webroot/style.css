@@ -12,10 +12,11 @@
   --warn: #e8c07a;
   --radius: 28px;
   --bottom-h: 96px;
-  --pill-bg: color-mix(in srgb, var(--primary) 40%, transparent);
-  --pill-thumb-bg: color-mix(in srgb, var(--primary) 86%, transparent);
+  --pill-bg: color-mix(in srgb, var(--surface-2) 92%, var(--primary) 8%);
+  --pill-thumb-bg: var(--primary);
   --pill-fg: var(--on-primary);
-  --pill-border: rgba(255,255,255,.22);
+  --pill-border: rgba(255,255,255,.14);
+  --scrim-tint: #000000;
 }
 @media (prefers-color-scheme: light) {
   :root {
@@ -30,6 +31,8 @@
     --danger: #ba1a1a;
     --ok: #3b6d45;
     --warn: #8a5b00;
+    --pill-border: rgba(0,0,0,.10);
+    --scrim-tint: #ffffff;
   }
 }
 @font-face {
@@ -141,6 +144,21 @@ h2 { font-size: 18px; margin: 0 0 12px; }
   font-size: 28px; line-height: 1; cursor: pointer;
 }
 
+.nav-scrim {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: calc(var(--bottom-h) + 56px);
+  pointer-events: none;
+  z-index: 11;
+  -webkit-backdrop-filter: blur(24px) saturate(130%);
+  backdrop-filter: blur(24px) saturate(130%);
+  background: linear-gradient(to top,
+    color-mix(in srgb, var(--scrim-tint) 68%, transparent) 0%,
+    color-mix(in srgb, var(--scrim-tint) 40%, transparent) 45%,
+    transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 40%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0%, #000 40%, transparent 100%);
+  transition: background .4s ease;
+}
 .bottom {
   position: fixed; left: 0; right: 0; bottom: 0;
   display: flex; justify-content: center;
@@ -156,15 +174,10 @@ h2 { font-size: 18px; margin: 0 0 12px; }
   height: 68px;
   padding: 8px;
   background: var(--pill-bg);
-  -webkit-backdrop-filter: blur(26px) saturate(160%);
-  backdrop-filter: blur(26px) saturate(160%);
   border: 1px solid var(--pill-border);
   border-radius: 999px;
-  box-shadow: 0 10px 28px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.10);
+  box-shadow: 0 10px 28px rgba(0,0,0,.28);
   transition: background .4s ease, border-color .4s ease;
-}
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .pill { background: var(--surface-2); }
 }
 .pill-thumb {
   position: absolute;
@@ -231,11 +244,13 @@ h2 { font-size: 18px; margin: 0 0 12px; }
 .warn { color: var(--danger); font-size: 12px; }
 
 .toast {
-  position: fixed; left: 50%; bottom: calc(var(--bottom-h) + 16px);
+  position: fixed; left: 50%; bottom: calc(var(--bottom-h) + 24px);
   transform: translate(-50%, 12px);
   background: var(--surface-2); color: var(--text);
   padding: 10px 16px; border-radius: 12px; font-size: 13px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.22);
   opacity: 0; transition: opacity .4s ease, transform .4s ease; pointer-events: none; max-width: 90%; text-align: center;
+  z-index: 50;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 

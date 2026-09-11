@@ -12,8 +12,8 @@ android {
         applicationId = "com.sdcardbind.manager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 32
-        versionName = "2.6.1"
+        versionCode = 33
+        versionName = "2.6.2"
     }
 
     signingConfigs {
@@ -77,6 +77,9 @@ dependencies {
     implementation("androidx.compose.animation:animation")
 
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
+
+    // Difuminado nativo del pill flotante (equivalente al backdrop-filter del WebUI).
+    implementation("dev.chrisbanes.haze:haze:1.7.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
