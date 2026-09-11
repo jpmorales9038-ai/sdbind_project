@@ -5,7 +5,7 @@
 
   **Vincula tarjetas SD y unidades OTG dentro del almacenamiento interno de tu Android — sin copiar archivos.**
 
-  ![versión](https://img.shields.io/badge/versión-v2.6.2-c5c0ff?style=for-the-badge&labelColor=131318)
+  ![versión](https://img.shields.io/badge/versión-v2.6.17-c5c0ff?style=for-the-badge&labelColor=131318)
   ![root](https://img.shields.io/badge/root-KernelSU%20%7C%20KernelSU--Next-1c1b21?style=for-the-badge)
   ![plataforma](https://img.shields.io/badge/plataforma-Android-1c1b21?style=for-the-badge)
 </div>
@@ -76,52 +76,6 @@ El proyecto trae dos formas de controlarlo:
 | Almacenamiento | Tarjeta SD y/o unidad OTG detectada por el sistema |
 
 <br/>
-
-## Instalación (sin PC ni Android Studio)
-
-1. **Crea una cuenta de GitHub** si no tienes una (gratis, en github.com).
-2. Entra a github.com desde el navegador de tu teléfono → **New repository**
-   (botón "+" arriba a la derecha) → dale cualquier nombre (ej.
-   `sd-bind-manager`) → **Create repository**. Puede ser privado o público,
-   no importa.
-3. Dentro del repo recién creado, busca la opción **"uploading an existing
-   file"** (aparece en la pantalla inicial del repo vacío) o **Add file →
-   Upload files**.
-4. Sube **todos los archivos y carpetas** de este proyecto manteniendo la
-   misma estructura de carpetas (arrastra o selecciona todo el contenido
-   descomprimido). Si tu navegador no te deja subir carpetas completas de
-   una vez, sube el `.zip` completo a cualquier app de almacenamiento en la
-   nube, ábrela con un explorador de archivos con función "extraer/comprimir"
-   (por ejemplo *Material Files* o *ZArchiver*, gratis), y sube los archivos
-   ya extraídos desde ahí — el navegador sí permite seleccionar múltiples
-   archivos de una carpeta local.
-5. Confirma la subida (**Commit changes**).
-6. Ve a la pestaña **Actions** del repositorio. Debería aparecer un flujo
-   llamado **"Build APK + módulo KSU"** corriendo automáticamente (tarda
-   unos 3-6 minutos la primera vez).
-7. Cuando termine (ícono verde ✔️), entra a esa ejecución y baja hasta
-   **Artifacts** → descarga **`sdcard_bind_ui_con_app`**. Eso te da un
-   `.zip` que contiene el zip real del módulo.
-8. Extrae ese zip descargado (con Material Files/ZArchiver) — adentro está
-   `sdcard_bind_ui_con_app.zip`, que es el que instalas en KernelSU-Next
-   Manager → Módulos → Instalar.
-9. Reinicia el teléfono. La app **SD Bind Manager** debería instalarse sola
-   y aparecer en tu cajón de apps.
-
-### Si algo falla en la compilación (Actions en rojo ❌)
-
-Abre el log del paso que falló (aparece marcado) y pégamelo — lo más
-común es que cambió la versión de alguna librería; se ajusta y vuelves
-a subir el archivo corregido.
-
-<br/>
-
-## Nota
-
-El build que genera este workflow es un **APK "debug"** (autofirmado por
-el propio proceso de compilación). Funciona perfectamente para uso
-personal instalado directamente en tu teléfono; no está pensado para
-publicarse en una tienda de apps.
 
 <div align="center">
   <sub>SD Bind · módulo <code>sdcard_bind_ui</code> · hecho para KernelSU / KernelSU-Next</sub>

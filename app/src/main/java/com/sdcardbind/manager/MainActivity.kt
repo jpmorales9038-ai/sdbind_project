@@ -319,36 +319,6 @@ fun BindApp() {
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = cs.background,
-        snackbarHost = {
-            snack?.let {
-                Snackbar(
-                    // El pill flota FUERA del Scaffold, así que el snackbar (nuestro "toast"
-                    // nativo) necesita este margen extra o queda tapado detrás — el mismo bug
-                    // que arreglamos en el WebUI.
-                    Modifier.padding(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 16.dp),
-                    containerColor = cs.inverseSurface,
-                    contentColor = cs.inverseOnSurface
-                ) { Text(it) }
-            }
-        },
-        floatingActionButton = {
-            AnimatedVisibility(
-                visible = screen == "tabs" && currentTab == Tab.Home && rootOk == true,
-                enter = scaleIn(floatSpring) + fadeIn(),
-                exit = scaleOut() + fadeOut(),
-                // Antes el FAB quedaba posicionado por Scaffold en base a la altura del
-                // bottomBar. Ahora que el pill flota fuera del Scaffold (para que el
-                // contenido pueda pasar detrás y transparentarlo), lo compensamos a mano.
-                modifier = Modifier.padding(bottom = 84.dp)
-            ) {
-                FloatingActionButton(
-                    onClick = { flow = Flow.PickSource; pendingSource = "" },
-                    containerColor = cs.primaryContainer,
-                    contentColor = cs.onPrimaryContainer,
-                    shape = CircleShape
-                ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_bind)) }
-            }
-        }
     ) { pad ->
         Row(
             Modifier
@@ -491,6 +461,34 @@ fun BindApp() {
         // por detrás, con un tinte blanco o negro según el tema — igual que en el WebUI —
         // sin tocar el color sólido del pill.
         NavScrim(hazeState = hazeState)
+    }
+    // FAB y toast se sacaron de los slots del Scaffold y se declaran ACÁ, después del
+    // NavScrim: en Compose, lo que se declara más tarde dentro del mismo Box se dibuja
+    // arriba. Antes el scrim (declarado después del Scaffold) tapaba ambos; ahora quedan
+    // siempre por delante del difuminado, sin tocar cómo se ve este último.
+    AnimatedVisibility(
+        visible = screen == "tabs" && currentTab == Tab.Home && rootOk == true,
+        enter = scaleIn(floatSpring) + fadeIn(),
+        exit = scaleOut() + fadeOut(),
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(bottom = 84.dp, end = 16.dp)
+    ) {
+        FloatingActionButton(
+            onClick = { flow = Flow.PickSource; pendingSource = "" },
+            containerColor = cs.primaryContainer,
+            contentColor = cs.onPrimaryContainer,
+            shape = CircleShape
+        ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_bind)) }
+    }
+    snack?.let {
+        Snackbar(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 16.dp),
+            containerColor = cs.inverseSurface,
+            contentColor = cs.inverseOnSurface
+        ) { Text(it) }
     }
     AnimatedVisibility(
         visible = screen == "tabs" && rootOk == true,
