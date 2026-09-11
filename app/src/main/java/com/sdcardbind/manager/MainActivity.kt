@@ -624,8 +624,13 @@ private fun StatusScrim(hazeState: HazeState) {
     Box(
         Modifier
             .fillMaxWidth()
-            .height(120.dp)
-            .statusBarsPadding()
+            // El fondo/blur deben pintar la franja completa, incluyendo el área física de la
+            // barra de estado — por eso NO llevan .statusBarsPadding() antes: ese modificador
+            // reserva ese espacio como padding vacío y empuja el degradado por debajo de la
+            // barra, dejándola sin difuminar. En vez de padding, sumamos la altura real de la
+            // barra de estado a la altura fija del box, para que el degradado siga arrancando
+            // arriba del todo y con el mismo margen visual de antes debajo de ella.
+            .height(120.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
             .background(
                 Brush.verticalGradient(
                     colors = listOf(cs.background.copy(alpha = 0.92f), Color.Transparent)
@@ -659,8 +664,12 @@ private fun NavScrim(hazeState: HazeState) {
     Box(
         Modifier
             .fillMaxWidth()
-            .height(168.dp)
-            .navigationBarsPadding()
+            // Mismo criterio que en StatusScrim: si .navigationBarsPadding() va antes del
+            // background/hazeEffect, el degradado no llega a pintar la franja real de la
+            // barra de navegación (queda como padding vacío) y aparece un corte seco justo
+            // encima de ella. Sumamos su alto a la altura fija del box en vez de usarlo
+            // como padding, así el degradado sigue llegando hasta el borde físico inferior.
+            .height(168.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
             .background(
                 Brush.verticalGradient(
                     colors = listOf(Color.Transparent, cs.background.copy(alpha = 0.92f))
