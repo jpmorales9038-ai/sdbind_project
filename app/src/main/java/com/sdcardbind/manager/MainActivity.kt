@@ -70,6 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -295,7 +296,11 @@ fun BindApp() {
             AnimatedVisibility(
                 visible = screen == "tabs" && currentTab == Tab.Home && rootOk == true,
                 enter = scaleIn(floatSpring) + fadeIn(),
-                exit = scaleOut() + fadeOut()
+                exit = scaleOut() + fadeOut(),
+                // Antes el FAB quedaba posicionado por Scaffold en base a la altura del
+                // bottomBar. Ahora que el pill flota fuera del Scaffold (para que el
+                // contenido pueda pasar detrás y transparentarlo), lo compensamos a mano.
+                modifier = Modifier.padding(bottom = 84.dp)
             ) {
                 FloatingActionButton(
                     onClick = { flow = Flow.PickSource; pendingSource = "" },
@@ -303,15 +308,6 @@ fun BindApp() {
                     contentColor = cs.onPrimaryContainer,
                     shape = CircleShape
                 ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_bind)) }
-            }
-        },
-        bottomBar = {
-            AnimatedVisibility(
-                visible = screen == "tabs" && rootOk == true,
-                enter = slideInVertically { it } + fadeIn(),
-                exit = slideOutVertically { it } + fadeOut()
-            ) {
-                BottomNav(pagerState = pagerState, onTab = goTab)
             }
         }
     ) { pad ->
@@ -433,6 +429,17 @@ fun BindApp() {
             }
         }
         }
+    }
+    // El pill vive FUERA del Scaffold (ya no es bottomBar), flotando encima del contenido.
+    // Así, cuando el usuario scrollea, las cards pasan físicamente por detrás y se alcanzan
+    // a ver a través de su fondo semitransparente — no un color opaco tapando todo.
+    AnimatedVisibility(
+        visible = screen == "tabs" && rootOk == true,
+        enter = slideInVertically { it } + fadeIn(),
+        exit = slideOutVertically { it } + fadeOut(),
+        modifier = Modifier.align(Alignment.BottomCenter)
+    ) {
+        BottomNav(pagerState = pagerState, onTab = goTab)
     }
     OtgConnectPopup(vol = otgPopup, onDismiss = { otgPopup = null })
     pendingDelete?.let { entry ->
@@ -561,10 +568,11 @@ private val pillSpring = spring<Float>(
 @Composable
 private fun BottomNav(pagerState: PagerState, onTab: (Tab) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    // Colores del pill 100% dinámicos (Material Expressive) y opacos, sin cristal ni blur:
-    // la cápsula usa el tono "container" (más oscuro/neutro) y el thumb activo el tono
-    // "primary" (más claro/vivo), igual que la referencia — solo que fijos ya no, dinámicos.
-    val pillOuter = cs.primaryContainer
+    // Fondo de la cápsula: color del tema oscurecido y con opacidad reducida (semitransparente
+    // plano, SIN blur/vidrio ni borde de contorno).
+    val pillOuter = remember(cs.primaryContainer) {
+        lerp(Color.Black, cs.primaryContainer, 0.6f).copy(alpha = 0.5f)
+    }
     val thumbColor = cs.primary
     val inkOn = cs.onPrimary
     val inkOff = cs.onPrimaryContainer
