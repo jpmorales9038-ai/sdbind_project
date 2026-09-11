@@ -50,6 +50,9 @@ fun AppTheme(content: @Composable () -> Unit) {
             val window = (view.context as Activity).window
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !dark
             WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !dark
+            // Barra de navegación negra sólida en tema oscuro; en claro se deja transparente
+            // (el sistema ya la dibuja acorde con isAppearanceLightNavigationBars).
+            window.navigationBarColor = if (dark) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT
         }
     }
 

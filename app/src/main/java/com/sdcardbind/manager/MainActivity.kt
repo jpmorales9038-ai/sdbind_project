@@ -625,14 +625,16 @@ private fun NavScrim(hazeState: HazeState) {
 @Composable
 private fun BottomNav(hazeState: HazeState, pagerState: PagerState, onTab: (Tab) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    // Fondo de la cápsula: UN solo color sólido y adaptativo (nada de degradados por dentro).
+    // Fondo de la cápsula: variación tonal de la paleta Monet (secondaryContainer cambia
+    // según el wallpaper del usuario en Android 12+), mezclada levemente con la superficie
+    // para mantener legibilidad si el dispositivo no soporta color dinámico.
     // El difuminado vive aparte, en NavScrim, por detrás del pill.
-    val pillSolid = remember(cs.surfaceContainerHigh, cs.primary) {
-        lerp(cs.surfaceContainerHigh, cs.primary, 0.08f)
+    val pillSolid = remember(cs.surfaceContainerHigh, cs.secondaryContainer) {
+        lerp(cs.surfaceContainerHigh, cs.secondaryContainer, 0.65f)
     }
     val thumbColor = cs.primary
     val inkOn = cs.onPrimary
-    val inkOff = cs.onPrimaryContainer
+    val inkOff = cs.onSecondaryContainer
     val labels = listOf(
         stringResource(R.string.tab_home),
         stringResource(R.string.tab_log),
