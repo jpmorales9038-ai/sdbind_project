@@ -100,7 +100,14 @@ mount_one() {
         return 0
     fi
 
-    if run_global mount -o bind "$(strip_slash "$SRC")" "$(strip_slash "$DEST")" 2>>"$LOG"; then
+    # --rbind (no -o bind): si SRC contiene a su vez otro punto de montaje anidado adentro
+    # (típico: la raíz de /mnt/media_rw/<id> con la SD montada por separado debajo, o
+    # cualquier origen que el usuario elija que resulte "contener" otro mount), un bind
+    # simple NO copia ese contenido anidado — queda como carpeta vacía del lado del destino,
+    # aunque el resto sí se vea bien. --rbind sí lo arrastra. make-rprivate evita que la
+    # propagación del origen (si viniera compartida) haga de las suyas en el destino.
+    if run_global mount --rbind "$(strip_slash "$SRC")" "$(strip_slash "$DEST")" 2>>"$LOG"; then
+        run_global mount --make-rprivate "$(strip_slash "$DEST")" 2>>"$LOG"
         run_global chcon -R u:object_r:media_rw_data_file:s0 "$(strip_slash "$DEST")" 2>/dev/null
         log "OK: $SRC -> $DEST"
         return 0
@@ -116,9 +123,16 @@ unmount_one() {
         log "Omitido (ruta protegida, no se desmonta): $DEST"
         return 0
     fi
-    if is_mounted "$DEST"; then
-        run_global umount -l "$(strip_slash "$DEST")" 2>>"$LOG" && log "Desmontado: $DEST"
-    fi
+    D=$(strip_slash "$DEST")
+    # Con --rbind, un mount anidado dentro del origen queda como una entrada de mount APARTE
+    # bajo DEST (no solo una carpeta) — hay que desmontar de más anidado a menos anidado, no
+    # solo el de arriba, o quedan mounts colgando.
+    awk -v p="$D" '$2 == p || index($2, p "/") == 1 { print $2 }' /proc/1/mounts 2>/dev/null |
+        awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2- |
+    while IFS= read -r mp; do
+        [ -n "$mp" ] || continue
+        run_global umount -l "$mp" 2>>"$LOG" && log "Desmontado: $mp"
+    done
 }
 
 each_entry() {
