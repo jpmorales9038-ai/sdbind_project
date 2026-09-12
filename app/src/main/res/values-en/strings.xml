@@ -53,6 +53,7 @@
     <string name="status_unknown">unchecked</string>
     <string name="open_in_explorer">Open in file explorer</string>
     <string name="no_file_explorer">No file explorer app was found</string>
+    <string name="path_copied_open_manually">Your file explorer can\'t open the folder directly. Path copied: %1$s</string>
     <string name="about">About</string>
     <string name="version_fmt">version %1$s</string>
     <string name="tools">Tools</string>

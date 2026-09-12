@@ -1,6 +1,8 @@
 package com.sdcardbind.manager
 
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -1040,6 +1042,60 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
 
 private const val DOCUMENTSUI_PACKAGE = "com.android.documentsui"
 
+// Common file-manager packages, used only as a last-resort fallback when no
+// app declares support for deep-linking into a specific folder.
+private val KNOWN_FILE_MANAGER_PACKAGES = setOf(
+    "com.mixplorer", "com.mixplorer.silver",
+    "pl.solidexplorer2", "pl.solidexplorer",
+    "com.lonelycatgames.Xplore",
+    "nextapp.fx",
+    "com.cxinventor.file.explorer",
+    "com.alphainventor.filemanager",
+    "com.google.android.apps.nbu.files",
+    "com.estrongs.android.pop",
+    "com.asus.filemanager",
+    "com.sec.android.app.myfiles",
+    "com.miui.fileexplorer", "com.mi.android.globalFileexplorer",
+    "com.coloros.filemanager", "com.oppo.filemanager", "com.oneplus.filemanager",
+    "com.huawei.filemanager",
+    "com.amaze.filemanager",
+    "dev.dworks.apps.anexplorer", "dev.dworks.apps.anexplorer.pro",
+    "com.ghostsq.commander",
+    "com.speedsoftware.rootexplorer",
+    "com.arloansoft.explorer"
+)
+private val FILE_MANAGER_LABEL_HINTS = listOf(
+    "file", "explorer", "archivo", "administrador", "commander", "files"
+)
+
+private fun copyPathToClipboard(context: Context, path: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    cm?.setPrimaryClip(ClipData.newPlainText("path", path))
+}
+
+private fun launchAnyFileManager(context: Context, absolutePath: String): Boolean {
+    val pm = context.packageManager
+    val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+    val installed = pm.queryIntentActivities(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
+
+    val known = installed.firstOrNull { it.activityInfo.packageName in KNOWN_FILE_MANAGER_PACKAGES }
+    val byLabel = installed.firstOrNull { ri ->
+        val label = ri.loadLabel(pm).toString().lowercase()
+        FILE_MANAGER_LABEL_HINTS.any { it in label }
+    }
+    val pick = known ?: byLabel ?: return false
+
+    val launch = pm.getLaunchIntentForPackage(pick.activityInfo.packageName) ?: return false
+    copyPathToClipboard(context, absolutePath)
+    runCatching { context.startActivity(launch) }.onFailure { return false }
+    Toast.makeText(
+        context,
+        context.getString(R.string.path_copied_open_manually, absolutePath),
+        Toast.LENGTH_LONG
+    ).show()
+    return true
+}
+
 private fun openMountedFolder(context: Context, dest: String) {
     val root = "/storage/emulated/0/"
     val clean = normalizeDir(dest)
@@ -1082,7 +1138,12 @@ private fun openMountedFolder(context: Context, dest: String) {
     }
 
     if (candidates.isEmpty()) {
-        Toast.makeText(context, context.getString(R.string.no_file_explorer), Toast.LENGTH_SHORT).show()
+        // No app declares support for deep-linking into a specific folder.
+        // Best effort: open whatever file manager is installed and copy the
+        // path so the user can paste/navigate manually.
+        if (!launchAnyFileManager(context, clean)) {
+            Toast.makeText(context, context.getString(R.string.no_file_explorer), Toast.LENGTH_SHORT).show()
+        }
         return
     }
 
@@ -1093,7 +1154,11 @@ private fun openMountedFolder(context: Context, dest: String) {
         }
     }
     runCatching { context.startActivity(chooser) }
-        .onFailure { Toast.makeText(context, context.getString(R.string.no_file_explorer), Toast.LENGTH_SHORT).show() }
+        .onFailure {
+            if (!launchAnyFileManager(context, clean)) {
+                Toast.makeText(context, context.getString(R.string.no_file_explorer), Toast.LENGTH_SHORT).show()
+            }
+        }
 }
 
 @Composable

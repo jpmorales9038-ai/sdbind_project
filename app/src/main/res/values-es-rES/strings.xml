@@ -53,6 +53,7 @@
     <string name="status_unknown">sin comprobar</string>
     <string name="open_in_explorer">Abrir en el explorador de archivos</string>
     <string name="no_file_explorer">No se encontró un explorador de archivos</string>
+    <string name="path_copied_open_manually">Tu explorador no admite abrir la carpeta directo. Ruta copiada: %1$s</string>
     <string name="about">Acerca de</string>
     <string name="version_fmt">versión %1$s</string>
     <string name="tools">Herramientas</string>
