@@ -13,6 +13,6 @@ apply_mounts
 
 log "== service: vigilando desconexión de SD/OTG =="
 while true; do
-    sleep 5
+    sleep 2
     watch_and_prune
 done

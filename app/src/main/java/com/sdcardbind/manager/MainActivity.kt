@@ -242,6 +242,7 @@ fun BindApp() {
 
     fun refresh(showSnack: Boolean = false, forceAnim: Boolean = showSnack) {
         scope.launch {
+            RootOps.pruneStaleMounts()
             entries = RootOps.loadMounts()
             applyVolumes(RootOps.storageVolumes())
             log = RootOps.tailLog()

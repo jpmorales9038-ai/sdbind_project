@@ -102,27 +102,21 @@ object RootOps {
 
     suspend fun listSubdirectories(path: String): List<String> {
         val raw = path.trimEnd('/').ifBlank { "/" }
-        if (raw == "/mnt/media_rw" || raw == "/mnt/expand") {
-            val awk = "awk -v p=" + shQuote(raw) + " '\$2 ~ \"^\" p \"/[^/]+\$\" { print \$2 }' /proc/1/mounts 2>/dev/null | sort -u"
-            return exec(awk).filter { it.isNotBlank() }.map { normalizeDir(it) }
-        }
-        // nsenter -t 1 -m: la app corre en su propio mount namespace (aislado por el sandbox
-        // de almacenamiento con alcance/FUSE), así que un bind hecho en el namespace de init
-        // (donde vive el mount real, ver functions.sh) queda invisible acá si no entramos a
-        // ese namespace primero — mismo motivo por el que mount/umount ya usan nsenter.
-        val cmd = "nsenter -t 1 -m -- find " + shQuote(raw) + " -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort"
-        return exec(cmd).filter { it.isNotBlank() }.map { normalizeDir(it) }
+        // Se delega en webctl.sh (list_subdirs), que usa run_global/nsenter con fallbacks
+        // reales — el nsenter suelto que había acá antes no alcanzaba (si el binario no
+        // resuelve en el PATH del shell de la app, el comando fallaba callado y quedaba
+        // como "carpeta vacía"). Mismo helper que ya usan mount/umount, probado y con red
+        // de seguridad por si falta nsenter.
+        return exec("sh $WEBCTL subdirs " + shQuote(raw)).filter { it.isNotBlank() }.map { normalizeDir(it) }
     }
 
     /** Archivos y carpetas dentro de `path`, para el explorador simple integrado. */
     suspend fun listEntries(path: String): List<FileEntry> {
         val raw = path.trimEnd('/').ifBlank { "/" }
         // "%y" = tipo (d/f/l...), "%s" = tamaño en bytes, "%f" = solo el nombre (sin ruta).
-        // Mismo criterio de nsenter que en listSubdirectories: sin esto, una carpeta recién
-        // montada por bind aparece vacía acá aunque un explorador root "normal" (que sí ve el
-        // namespace global) la muestre con contenido.
-        val cmd = "nsenter -t 1 -m -- find " + shQuote(raw) + " -mindepth 1 -maxdepth 1 -printf '%y|%s|%f\\n' 2>/dev/null"
-        return exec(cmd).mapNotNull { line ->
+        // Mismo motivo que listSubdirectories: se delega en webctl.sh (entries), no en un
+        // nsenter armado a mano en Kotlin.
+        return exec("sh $WEBCTL entries " + shQuote(raw)).mapNotNull { line ->
             val parts = line.split("|", limit = 3)
             if (parts.size < 3 || parts[2].isBlank()) return@mapNotNull null
             FileEntry(
@@ -138,10 +132,8 @@ object RootOps {
     suspend fun deleteEntry(path: String, isDir: Boolean): Boolean = withContext(Dispatchers.IO) {
         val p = (if (isDir) normalizeDir(path) else path).trimEnd('/')
         if (p.isBlank() || isUnsafeDest(p)) return@withContext false
-        // Mismo motivo de nsenter que en listEntries: si `p` cuelga de una carpeta con bind,
-        // sin esto el rm actúa sobre la vista vacía del namespace de la app, no sobre el
-        // contenido real montado.
-        val cmd = if (isDir) "nsenter -t 1 -m -- rm -rf ${shQuote(p)}" else "nsenter -t 1 -m -- rm -f ${shQuote(p)}"
+        // Se delega en webctl.sh (rm), que usa run_global — mismo motivo que listEntries.
+        val cmd = "sh $WEBCTL rm " + shQuote(p) + (if (isDir) " dir" else "")
         Shell.cmd(cmd).exec().isSuccess
     }
 
@@ -191,6 +183,17 @@ object RootOps {
     suspend fun unmountAll(): Boolean {
         val result = withContext(Dispatchers.IO) { Shell.cmd("sh $WEBCTL unmount").exec() }
         return result.isSuccess
+    }
+
+    /**
+     * Revisa los binds habilitados y desmonta (a mano, ya, sin esperar) los que quedaron
+     * colgando porque su origen (SD/OTG) ya no está — el servicio en segundo plano hace lo
+     * mismo cada pocos segundos, pero llamarlo también desde acá evita el hueco entre "se
+     * retiró la unidad" y "el bucle del servicio se dio cuenta", que es lo que hacía que la
+     * UI mostrara "montado" un rato después de sacar la tarjeta.
+     */
+    suspend fun pruneStaleMounts(): Boolean = withContext(Dispatchers.IO) {
+        Shell.cmd("sh $WEBCTL prune").exec().isSuccess
     }
 
     suspend fun removeMount(source: String, dest: String): Boolean = withContext(Dispatchers.IO) {

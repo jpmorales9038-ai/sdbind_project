@@ -56,17 +56,24 @@ case "$1" in
     list_children)
         TARGET=$(strip_slash "$2")
         [ -n "$TARGET" ] || exit 1
-        case "$TARGET" in
-            /mnt/media_rw|/mnt/expand)
-                awk -v p="$TARGET" '$2 ~ "^" p "/[^/]+$" { print $2 }' /proc/1/mounts 2>/dev/null | sort -u
-                ;;
-            *)
-                [ -d "$TARGET" ] || exit 1
-                for d in "$TARGET"/*; do
-                    [ -d "$d" ] && echo "$d"
-                done
-                ;;
-        esac
+        list_subdirs "$TARGET"
+        ;;
+
+    subdirs)
+        list_subdirs "$2"
+        ;;
+
+    entries)
+        list_dir_entries "$2"
+        ;;
+
+    rm)
+        [ "$4" = "dir" ] && delete_path "$2" dir || delete_path "$2" file
+        ;;
+
+    prune)
+        watch_and_prune
+        echo "DONE"
         ;;
 
     log)
@@ -91,6 +98,6 @@ case "$1" in
         ;;
 
     *)
-        echo "Uso: webctl.sh {apply|unmount|remove <origen> <destino>|status|detect|list_children <ruta>|log|storage|theme}"
+        echo "Uso: webctl.sh {apply|unmount|remove <origen> <destino>|status|detect|list_children <ruta>|subdirs <ruta>|entries <ruta>|rm <ruta> [dir]|prune|log|storage|theme}"
         ;;
 esac

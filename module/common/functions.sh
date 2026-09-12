@@ -211,6 +211,43 @@ df_stats() {
     }'
 }
 
+# Subcarpetas de primer nivel dentro de DIR (una ruta por línea). Con run_global: un bind
+# hecho en el namespace de init (ver mount_one) puede no verse desde el namespace propio del
+# llamador si no se entra a ese mismo namespace para leerlo también.
+list_subdirs() {
+    DIR=$(strip_slash "$1")
+    [ -n "$DIR" ] || return 1
+    case "$DIR" in
+        /mnt/media_rw|/mnt/expand)
+            awk -v p="$DIR" '$2 ~ "^" p "/[^/]+$" { print $2 }' /proc/1/mounts 2>/dev/null | sort -u
+            ;;
+        *)
+            run_global find "$DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort
+            ;;
+    esac
+}
+
+# Archivos y carpetas de primer nivel dentro de DIR: "tipo|tamaño|nombre" por línea. Mismo
+# motivo de run_global que list_subdirs.
+list_dir_entries() {
+    DIR=$(strip_slash "$1")
+    [ -n "$DIR" ] || return 1
+    run_global find "$DIR" -mindepth 1 -maxdepth 1 -printf '%y|%s|%f\n' 2>/dev/null
+}
+
+# Borra archivo o carpeta (con contenido). Mismo motivo de run_global: si PATH cuelga de una
+# carpeta con bind, un rm sin esto actúa sobre la vista vacía del namespace del llamador.
+delete_path() {
+    P=$(strip_slash "$1")
+    [ -n "$P" ] || return 1
+    is_protected "$P" && return 1
+    if [ "$2" = "dir" ]; then
+        run_global rm -rf "$P"
+    else
+        run_global rm -f "$P"
+    fi
+}
+
 dump_storage() {
     df_out=$(run_global df -aPh 2>/dev/null)
     [ -n "$df_out" ] || df_out=$(run_global df -Ph 2>/dev/null)
