@@ -228,11 +228,26 @@ list_subdirs() {
 }
 
 # Archivos y carpetas de primer nivel dentro de DIR: "tipo|tamaño|nombre" por línea. Mismo
-# motivo de run_global que list_subdirs.
+# motivo de run_global que list_subdirs. OJO: antes usaba `find -printf`, que es una
+# extensión de GNU findutils — el find de Android (toybox) no la soporta, falla callado y
+# devolvía siempre vacío (por eso "Explorar" mostraba "carpeta vacía" incluso ya montado,
+# mientras que el selector de carpetas -que usa list_subdirs, sin -printf- sí funcionaba).
+# Reemplazado por un loop portable con stat/wc, sin nada específico de GNU.
 list_dir_entries() {
     DIR=$(strip_slash "$1")
     [ -n "$DIR" ] || return 1
-    run_global find "$DIR" -mindepth 1 -maxdepth 1 -printf '%y|%s|%f\n' 2>/dev/null
+    run_global sh -c '
+        DIR="$1"
+        for f in "$DIR"/* "$DIR"/.[!.]* "$DIR"/..?*; do
+            [ -e "$f" ] || [ -L "$f" ] || continue
+            name=$(basename "$f")
+            if [ -d "$f" ]; then type=d; else type=f; fi
+            size=$(stat -c "%s" "$f" 2>/dev/null)
+            [ -n "$size" ] || size=$(wc -c < "$f" 2>/dev/null)
+            [ -n "$size" ] || size=0
+            echo "$type|$size|$name"
+        done
+    ' _ "$DIR" 2>/dev/null
 }
 
 # Borra archivo o carpeta (con contenido). Mismo motivo de run_global: si PATH cuelga de una
