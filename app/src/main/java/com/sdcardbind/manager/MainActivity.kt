@@ -1,11 +1,15 @@
 package com.sdcardbind.manager
 
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.provider.DocumentsContract
 import android.widget.Toast
+import androidx.core.content.FileProvider
+import java.io.File
 import android.content.res.Configuration
 import android.hardware.usb.UsbManager
 import android.os.Build
@@ -1034,21 +1038,62 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
     }
 }
 
+private const val DOCUMENTSUI_PACKAGE = "com.android.documentsui"
+
 private fun openMountedFolder(context: Context, dest: String) {
     val root = "/storage/emulated/0/"
     val clean = normalizeDir(dest)
     val relative = if (clean.startsWith(root)) clean.removePrefix(root) else clean.trimStart('/')
-    val docId = "primary:${relative.trimEnd('/')}"
-    try {
-        val uri = DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", docId)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, DocumentsContract.Document.MIME_TYPE_DIR)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        Toast.makeText(context, context.getString(R.string.no_file_explorer), Toast.LENGTH_SHORT).show()
+    val grant = Intent.FLAG_GRANT_READ_URI_PERMISSION
+    val pm = context.packageManager
+
+    val docUri = DocumentsContract.buildDocumentUri(
+        "com.android.externalstorage.documents",
+        "primary:${relative.trimEnd('/')}"
+    )
+    val docIntent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(docUri, DocumentsContract.Document.MIME_TYPE_DIR)
+        addFlags(grant)
     }
+
+    val fileIntent = runCatching {
+        val fileUri = FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", File(root, relative)
+        )
+        Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(fileUri, "resource/folder")
+            addFlags(grant)
+        }
+    }.getOrNull()
+
+    // Gather every app that can actually open a folder (excluding the bare-bones
+    // Documents UI picker), deduped by package, so the user gets a real chooser
+    // of their installed file explorers.
+    val candidates = LinkedHashMap<String, Intent>()
+    listOfNotNull(docIntent, fileIntent).forEach { base ->
+        pm.queryIntentActivities(base, PackageManager.MATCH_DEFAULT_ONLY).forEach { ri ->
+            val pkg = ri.activityInfo.packageName
+            if (pkg == DOCUMENTSUI_PACKAGE || candidates.containsKey(pkg)) return@forEach
+            runCatching { context.grantUriPermission(pkg, base.data!!, grant) }
+            candidates[pkg] = Intent(base).apply {
+                component = ComponentName(pkg, ri.activityInfo.name)
+            }
+        }
+    }
+
+    if (candidates.isEmpty()) {
+        Toast.makeText(context, context.getString(R.string.no_file_explorer), Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val targets = candidates.values.toList()
+    val chooser = Intent.createChooser(targets.first(), context.getString(R.string.open_in_explorer)).apply {
+        if (targets.size > 1) {
+            putExtra(Intent.EXTRA_INITIAL_INTENTS, targets.drop(1).toTypedArray())
+        }
+    }
+    runCatching { context.startActivity(chooser) }
+        .onFailure { Toast.makeText(context, context.getString(R.string.no_file_explorer), Toast.LENGTH_SHORT).show() }
 }
 
 @Composable
