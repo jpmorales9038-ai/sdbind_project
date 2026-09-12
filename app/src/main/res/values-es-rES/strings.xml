@@ -52,8 +52,14 @@
     <string name="status_missing">origen ausente</string>
     <string name="status_unknown">sin comprobar</string>
     <string name="open_in_explorer">Abrir en el explorador de archivos</string>
-    <string name="no_file_explorer">No se encontró un explorador de archivos</string>
-    <string name="path_copied_open_manually">Tu explorador no admite abrir la carpeta directo. Ruta copiada: %1$s</string>
+    <string name="explore">Explorar</string>
+    <string name="empty_folder">Carpeta vacía</string>
+    <string name="open_file_failed">No hay ninguna app que pueda abrir este archivo</string>
+    <string name="delete_file_title">Eliminar archivo</string>
+    <string name="delete_folder_title">Eliminar carpeta</string>
+    <string name="delete_file_body">Se elimina «%1$s» de forma permanente.</string>
+    <string name="delete_folder_body">Se elimina «%1$s» y todo su contenido de forma permanente.</string>
+    <string name="delete_item_failed">No se pudo eliminar «%1$s»</string>
     <string name="about">Acerca de</string>
     <string name="version_fmt">versión %1$s</string>
     <string name="tools">Herramientas</string>

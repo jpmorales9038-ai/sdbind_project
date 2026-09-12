@@ -15,6 +15,13 @@ data class MountEntry(
     val status: String = ""
 )
 
+data class FileEntry(
+    val name: String,
+    val path: String,
+    val isDir: Boolean,
+    val sizeBytes: Long
+)
+
 enum class VolumeKind { INTERNAL, EXTERNAL }
 
 data class StorageVolume(
@@ -61,6 +68,15 @@ fun humanToBytes(s: String): Long {
     return (num * mul).toLong()
 }
 
+fun humanBytes(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val units = listOf("KB", "MB", "GB", "TB")
+    var value = bytes.toDouble()
+    var i = -1
+    do { value /= 1024.0; i++ } while (value >= 1024.0 && i < units.lastIndex)
+    return "%.1f %s".format(value, units[i])
+}
+
 /** Destinos que romperían el almacenamiento interno si se hace bind/umount. */
 fun isUnsafeDest(path: String): Boolean {
     val p = path.trim().trimEnd('/')
@@ -93,6 +109,32 @@ object RootOps {
         val cmd = "find " + shQuote(raw) + " -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort"
         return exec(cmd).filter { it.isNotBlank() }.map { normalizeDir(it) }
     }
+
+    /** Archivos y carpetas dentro de `path`, para el explorador simple integrado. */
+    suspend fun listEntries(path: String): List<FileEntry> {
+        val raw = path.trimEnd('/').ifBlank { "/" }
+        // "%y" = tipo (d/f/l...), "%s" = tamaño en bytes, "%f" = solo el nombre (sin ruta).
+        val cmd = "find " + shQuote(raw) + " -mindepth 1 -maxdepth 1 -printf '%y|%s|%f\\n' 2>/dev/null"
+        return exec(cmd).mapNotNull { line ->
+            val parts = line.split("|", limit = 3)
+            if (parts.size < 3 || parts[2].isBlank()) return@mapNotNull null
+            FileEntry(
+                name = parts[2],
+                path = normalizeDir(raw) + parts[2],
+                isDir = parts[0] == "d",
+                sizeBytes = parts[1].toLongOrNull() ?: 0L
+            )
+        }.sortedWith(compareBy({ !it.isDir }, { it.name.lowercase() }))
+    }
+
+    /** Borra un archivo o carpeta (con su contenido). Rechaza rutas vacías o críticas. */
+    suspend fun deleteEntry(path: String, isDir: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val p = (if (isDir) normalizeDir(path) else path).trimEnd('/')
+        if (p.isBlank() || isUnsafeDest(p)) return@withContext false
+        val cmd = if (isDir) "rm -rf ${shQuote(p)}" else "rm -f ${shQuote(p)}"
+        Shell.cmd(cmd).exec().isSuccess
+    }
+
 
     suspend fun loadMounts(): List<MountEntry> {
         val lines = exec("sh $WEBCTL status")

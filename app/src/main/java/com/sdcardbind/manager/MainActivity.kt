@@ -1,15 +1,11 @@
 package com.sdcardbind.manager
 
 import android.content.BroadcastReceiver
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
-import android.provider.DocumentsContract
 import android.widget.Toast
+import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import java.io.File
 import android.content.res.Configuration
@@ -164,7 +160,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Tab { Home, Log, About }
-private enum class Flow { Home, PickSource, PickDest }
+private enum class Flow { Home, PickSource, PickDest, Browse }
 
 private val spatial = tween<IntOffset>(420, easing = FastOutSlowInEasing)
 private val sizeSpring = spring<IntSize>(
@@ -199,6 +195,7 @@ fun BindApp() {
     }
     var flow by remember { mutableStateOf(Flow.Home) }
     var pendingSource by remember { mutableStateOf("") }
+    var browsePath by remember { mutableStateOf("") }
     var snack by remember { mutableStateOf<String?>(null) }
     var otgPopup by remember { mutableStateOf<StorageVolume?>(null) }
     var pendingDelete by remember { mutableStateOf<MountEntry?>(null) }
@@ -317,6 +314,7 @@ fun BindApp() {
         rootOk == false -> "noroot"
         flow == Flow.PickSource -> "src"
         flow == Flow.PickDest -> "dst"
+        flow == Flow.Browse -> "browse"
         else -> "tabs"
     }
 
@@ -389,6 +387,10 @@ fun BindApp() {
                         }
                     }
                 )
+                "browse" -> FileBrowserScreen(
+                    startPath = browsePath,
+                    onBack = { flow = Flow.Home }
+                )
                 else -> HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
@@ -427,6 +429,7 @@ fun BindApp() {
                             playToken = storageGen,
                             onRefreshStorage = { refresh(true) },
                             onDelete = { i -> pendingDelete = entries.getOrNull(i) },
+                            onOpen = { path -> browsePath = path; flow = Flow.Browse },
                             onApply = {
                                 scope.launch {
                                     busy = true
@@ -830,6 +833,7 @@ private fun HomePane(
     playToken: Int,
     onRefreshStorage: () -> Unit,
     onDelete: (Int) -> Unit,
+    onOpen: (String) -> Unit,
     onApply: () -> Unit,
     onUnmount: () -> Unit
 ) {
@@ -848,7 +852,7 @@ private fun HomePane(
             Column(
                 Modifier.weight(0.58f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 8.dp)
             ) {
-                BindList(entries, onDelete)
+                BindList(entries, onDelete, onOpen)
                 Spacer(Modifier.height(80.dp))
             }
         }
@@ -861,7 +865,7 @@ private fun HomePane(
             Spacer(Modifier.height(20.dp))
             StorageHero(volumes, playToken, onRefreshStorage)
             Spacer(Modifier.height(28.dp))
-            BindList(entries, onDelete)
+            BindList(entries, onDelete, onOpen)
             Spacer(Modifier.height(16.dp))
             ActionButtons(busy, entries.isNotEmpty(), onApply, onUnmount)
             Spacer(Modifier.height(96.dp))
@@ -885,7 +889,8 @@ private fun HomeHeader() {
 @Composable
 private fun BindList(
     entries: List<MountEntry>,
-    onDelete: (Int) -> Unit
+    onDelete: (Int) -> Unit,
+    onOpen: (String) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
     Text(stringResource(R.string.binds), color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
@@ -904,7 +909,7 @@ private fun BindList(
         }
     } else {
         entries.forEachIndexed { i, e ->
-            BindCard(e, onDelete = { onDelete(i) })
+            BindCard(e, onDelete = { onDelete(i) }, onOpen = { onOpen(e.dest) })
             Spacer(Modifier.height(10.dp))
         }
     }
@@ -1040,131 +1045,32 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
     }
 }
 
-private const val DOCUMENTSUI_PACKAGE = "com.android.documentsui"
-
-// Common file-manager packages, used only as a last-resort fallback when no
-// app declares support for deep-linking into a specific folder.
-private val KNOWN_FILE_MANAGER_PACKAGES = setOf(
-    "com.mixplorer", "com.mixplorer.silver",
-    "pl.solidexplorer2", "pl.solidexplorer",
-    "com.lonelycatgames.Xplore",
-    "nextapp.fx",
-    "com.cxinventor.file.explorer",
-    "com.alphainventor.filemanager",
-    "com.google.android.apps.nbu.files",
-    "com.estrongs.android.pop",
-    "com.asus.filemanager",
-    "com.sec.android.app.myfiles",
-    "com.miui.fileexplorer", "com.mi.android.globalFileexplorer",
-    "com.coloros.filemanager", "com.oppo.filemanager", "com.oneplus.filemanager",
-    "com.huawei.filemanager",
-    "com.amaze.filemanager",
-    "dev.dworks.apps.anexplorer", "dev.dworks.apps.anexplorer.pro",
-    "com.ghostsq.commander",
-    "com.speedsoftware.rootexplorer",
-    "com.arloansoft.explorer"
-)
-private val FILE_MANAGER_LABEL_HINTS = listOf(
-    "file", "explorer", "archivo", "administrador", "commander", "files"
-)
-
-private fun copyPathToClipboard(context: Context, path: String) {
-    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    cm?.setPrimaryClip(ClipData.newPlainText("path", path))
-}
-
-private fun launchAnyFileManager(context: Context, absolutePath: String): Boolean {
-    val pm = context.packageManager
-    val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-    val installed = pm.queryIntentActivities(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
-
-    val known = installed.firstOrNull { it.activityInfo.packageName in KNOWN_FILE_MANAGER_PACKAGES }
-    val byLabel = installed.firstOrNull { ri ->
-        val label = ri.loadLabel(pm).toString().lowercase()
-        FILE_MANAGER_LABEL_HINTS.any { it in label }
-    }
-    val pick = known ?: byLabel ?: return false
-
-    val launch = pm.getLaunchIntentForPackage(pick.activityInfo.packageName) ?: return false
-    copyPathToClipboard(context, absolutePath)
-    runCatching { context.startActivity(launch) }.onFailure { return false }
-    Toast.makeText(
-        context,
-        context.getString(R.string.path_copied_open_manually, absolutePath),
-        Toast.LENGTH_LONG
-    ).show()
-    return true
-}
-
-private fun openMountedFolder(context: Context, dest: String) {
-    val root = "/storage/emulated/0/"
-    val clean = normalizeDir(dest)
-    val relative = if (clean.startsWith(root)) clean.removePrefix(root) else clean.trimStart('/')
-    val grant = Intent.FLAG_GRANT_READ_URI_PERMISSION
-    val pm = context.packageManager
-
-    val docUri = DocumentsContract.buildDocumentUri(
-        "com.android.externalstorage.documents",
-        "primary:${relative.trimEnd('/')}"
-    )
-    val docIntent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(docUri, DocumentsContract.Document.MIME_TYPE_DIR)
-        addFlags(grant)
-    }
-
-    val fileIntent = runCatching {
-        val fileUri = FileProvider.getUriForFile(
-            context, "${context.packageName}.fileprovider", File(root, relative)
-        )
-        Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(fileUri, "resource/folder")
-            addFlags(grant)
-        }
+/** Abre un archivo con la app externa que corresponda según su tipo (imagen, video, apk...). */
+private fun openFileExternally(context: Context, absolutePath: String) {
+    val file = File(absolutePath)
+    val ext = file.extension.lowercase()
+    val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
+    val uri = runCatching {
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }.getOrNull()
-
-    // Gather every app that can actually open a folder (excluding the bare-bones
-    // Documents UI picker), deduped by package, so the user gets a real chooser
-    // of their installed file explorers.
-    val candidates = LinkedHashMap<String, Intent>()
-    listOfNotNull(docIntent, fileIntent).forEach { base ->
-        pm.queryIntentActivities(base, PackageManager.MATCH_DEFAULT_ONLY).forEach { ri ->
-            val pkg = ri.activityInfo.packageName
-            if (pkg == DOCUMENTSUI_PACKAGE || candidates.containsKey(pkg)) return@forEach
-            runCatching { context.grantUriPermission(pkg, base.data!!, grant) }
-            candidates[pkg] = Intent(base).apply {
-                component = ComponentName(pkg, ri.activityInfo.name)
-            }
-        }
-    }
-
-    if (candidates.isEmpty()) {
-        // No app declares support for deep-linking into a specific folder.
-        // Best effort: open whatever file manager is installed and copy the
-        // path so the user can paste/navigate manually.
-        if (!launchAnyFileManager(context, clean)) {
-            Toast.makeText(context, context.getString(R.string.no_file_explorer), Toast.LENGTH_SHORT).show()
-        }
+    if (uri == null) {
+        Toast.makeText(context, context.getString(R.string.open_file_failed), Toast.LENGTH_SHORT).show()
         return
     }
-
-    val targets = candidates.values.toList()
-    val chooser = Intent.createChooser(targets.first(), context.getString(R.string.open_in_explorer)).apply {
-        if (targets.size > 1) {
-            putExtra(Intent.EXTRA_INITIAL_INTENTS, targets.drop(1).toTypedArray())
-        }
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, mime)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    runCatching { context.startActivity(chooser) }
+    runCatching { context.startActivity(Intent.createChooser(intent, file.name)) }
         .onFailure {
-            if (!launchAnyFileManager(context, clean)) {
-                Toast.makeText(context, context.getString(R.string.no_file_explorer), Toast.LENGTH_SHORT).show()
-            }
+            Toast.makeText(context, context.getString(R.string.open_file_failed), Toast.LENGTH_SHORT).show()
         }
 }
 
+
 @Composable
-private fun BindCard(entry: MountEntry, onDelete: () -> Unit) {
+private fun BindCard(entry: MountEntry, onDelete: () -> Unit, onOpen: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val context = LocalContext.current
     val isMounted = entry.status == "MOUNTED"
     val name = dirBaseName(entry.dest).ifBlank { dirBaseName(entry.source).ifBlank { stringResource(R.string.bind_fallback) } }
     Row(
@@ -1185,7 +1091,7 @@ private fun BindCard(entry: MountEntry, onDelete: () -> Unit) {
                     if (isMounted) {
                         Modifier.clickable(
                             onClickLabel = stringResource(R.string.open_in_explorer)
-                        ) { openMountedFolder(context, entry.dest) }
+                        ) { onOpen() }
                     } else Modifier
                 ),
             contentAlignment = Alignment.Center
@@ -1599,5 +1505,176 @@ private fun ShortcutChip(label: String, icon: ImageVector, onClick: () -> Unit) 
         Icon(icon, null, tint = cs.primary, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
         Text(label, color = cs.onSurface, fontSize = 13.sp)
+    }
+}
+
+/**
+ * Explorador de archivos simple, integrado en la app: reemplaza el intento anterior de
+ * abrir una app externa (que en muchos equipos no encontraba ninguna). Arranca directo en
+ * la carpeta montada, deja navegar libremente, abrir archivos con la app que corresponda,
+ * y borrar tanto archivos como carpetas.
+ */
+@Composable
+private fun FileBrowserScreen(startPath: String, onBack: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    var current by remember { mutableStateOf(normalizeDir(startPath)) }
+    var dirEntries by remember { mutableStateOf(listOf<FileEntry>()) }
+    var loading by remember { mutableStateOf(true) }
+    var pendingDelete by remember { mutableStateOf<FileEntry?>(null) }
+    val scope = rememberCoroutineScope()
+
+    fun load(path: String) {
+        loading = true
+        scope.launch {
+            dirEntries = RootOps.listEntries(path)
+            loading = false
+        }
+    }
+    LaunchedEffect(current) { load(current) }
+
+    Column(Modifier.fillMaxSize().background(cs.background)) {
+        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Filled.ArrowBack, null, tint = cs.onBackground)
+            }
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.explore), color = cs.onBackground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(
+                    dirBaseName(current).ifBlank { current },
+                    color = cs.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        Text(
+            current,
+            color = cs.onSurfaceVariant,
+            fontSize = 11.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 20.dp)
+        )
+
+        AnimatedVisibility(current.trimEnd('/') != "") {
+            TextButton(onClick = {
+                current = normalizeDir(current.trimEnd('/').substringBeforeLast("/").ifBlank { "/" })
+            }) {
+                Icon(Icons.Filled.ArrowUpward, null, modifier = Modifier.size(16.dp), tint = cs.primary)
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.up_one_level), color = cs.primary)
+            }
+        }
+
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            AnimatedContent(targetState = loading to dirEntries, label = "files") { (isLoading, files) ->
+                when {
+                    isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = cs.primary)
+                    }
+                    files.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.empty_folder), color = cs.onSurfaceVariant)
+                    }
+                    else -> LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+                        items(files, key = { it.path }) { entry ->
+                            FileRow(
+                                entry = entry,
+                                onClick = {
+                                    if (entry.isDir) current = normalizeDir(entry.path)
+                                    else openFileExternally(context, entry.path)
+                                },
+                                onDelete = { pendingDelete = entry }
+                            )
+                        }
+                        item { Spacer(Modifier.height(96.dp)) }
+                    }
+                }
+            }
+        }
+    }
+
+    pendingDelete?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = {
+                Text(stringResource(if (entry.isDir) R.string.delete_folder_title else R.string.delete_file_title))
+            },
+            text = {
+                Text(
+                    stringResource(
+                        if (entry.isDir) R.string.delete_folder_body else R.string.delete_file_body,
+                        entry.name
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDelete = null
+                    scope.launch {
+                        val ok = RootOps.deleteEntry(entry.path, entry.isDir)
+                        if (ok) load(current)
+                        else Toast.makeText(
+                            context,
+                            context.getString(R.string.delete_item_failed, entry.name),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }) { Text(stringResource(R.string.delete), color = cs.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.cancel)) }
+            }
+        )
+    }
+}
+
+@Composable
+private fun FileRow(entry: FileEntry, onClick: () -> Unit, onDelete: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(MaterialTheme.shapes.large)
+            .background(cs.surfaceContainer)
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(42.dp).clip(CircleShape).background(cs.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (entry.isDir) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
+                null,
+                tint = cs.onPrimaryContainer,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                entry.name,
+                color = cs.onSurface,
+                fontWeight = FontWeight.Medium,
+                fontSize = 16.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!entry.isDir) {
+                Text(humanBytes(entry.sizeBytes), color = cs.onSurfaceVariant, fontSize = 11.sp)
+            }
+        }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Filled.Delete, null, tint = cs.error, modifier = Modifier.size(18.dp))
+        }
+        if (entry.isDir) {
+            Icon(Icons.Filled.ChevronRight, null, tint = cs.onSurfaceVariant)
+        }
     }
 }

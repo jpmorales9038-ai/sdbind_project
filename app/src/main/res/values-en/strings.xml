@@ -52,8 +52,14 @@
     <string name="status_missing">source missing</string>
     <string name="status_unknown">unchecked</string>
     <string name="open_in_explorer">Open in file explorer</string>
-    <string name="no_file_explorer">No file explorer app was found</string>
-    <string name="path_copied_open_manually">Your file explorer can\'t open the folder directly. Path copied: %1$s</string>
+    <string name="explore">Explore</string>
+    <string name="empty_folder">Empty folder</string>
+    <string name="open_file_failed">No app found that can open this file</string>
+    <string name="delete_file_title">Delete file</string>
+    <string name="delete_folder_title">Delete folder</string>
+    <string name="delete_file_body">"\u201C%1$s\u201D will be removed permanently."</string>
+    <string name="delete_folder_body">"\u201C%1$s\u201D and everything inside it will be removed permanently."</string>
+    <string name="delete_item_failed">Couldn\'t delete "%1$s"</string>
     <string name="about">About</string>
     <string name="version_fmt">version %1$s</string>
     <string name="tools">Tools</string>
