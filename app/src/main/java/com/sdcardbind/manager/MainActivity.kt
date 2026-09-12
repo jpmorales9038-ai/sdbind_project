@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.provider.DocumentsContract
+import android.widget.Toast
 import android.content.res.Configuration
 import android.hardware.usb.UsbManager
 import android.os.Build
@@ -1032,9 +1034,28 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
     }
 }
 
+private fun openMountedFolder(context: Context, dest: String) {
+    val root = "/storage/emulated/0/"
+    val clean = normalizeDir(dest)
+    val relative = if (clean.startsWith(root)) clean.removePrefix(root) else clean.trimStart('/')
+    val docId = "primary:${relative.trimEnd('/')}"
+    try {
+        val uri = DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", docId)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, DocumentsContract.Document.MIME_TYPE_DIR)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, context.getString(R.string.no_file_explorer), Toast.LENGTH_SHORT).show()
+    }
+}
+
 @Composable
 private fun BindCard(entry: MountEntry, onDelete: () -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val isMounted = entry.status == "MOUNTED"
     val name = dirBaseName(entry.dest).ifBlank { dirBaseName(entry.source).ifBlank { stringResource(R.string.bind_fallback) } }
     Row(
         Modifier
@@ -1046,10 +1067,25 @@ private fun BindCard(entry: MountEntry, onDelete: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(48.dp).clip(CircleShape).background(cs.primaryContainer),
+            Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(if (isMounted) cs.primaryContainer else cs.primaryContainer.copy(alpha = 0.35f))
+                .then(
+                    if (isMounted) {
+                        Modifier.clickable(
+                            onClickLabel = stringResource(R.string.open_in_explorer)
+                        ) { openMountedFolder(context, entry.dest) }
+                    } else Modifier
+                ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.Folder, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(24.dp))
+            Icon(
+                Icons.Filled.Folder,
+                null,
+                tint = if (isMounted) cs.onPrimaryContainer else cs.onPrimaryContainer.copy(alpha = 0.35f),
+                modifier = Modifier.size(24.dp)
+            )
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

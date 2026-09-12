@@ -5,7 +5,7 @@
 
   **Vincula tarjetas SD y unidades OTG dentro del almacenamiento interno de tu Android — sin copiar archivos.**
 
-  ![versión](https://img.shields.io/badge/versión-v2.6.23-c5c0ff?style=for-the-badge&labelColor=131318)
+  ![versión](https://img.shields.io/badge/versión-v2.6.24-c5c0ff?style=for-the-badge&labelColor=131318)
   ![root](https://img.shields.io/badge/root-KernelSU%20%7C%20KernelSU--Next-1c1b21?style=for-the-badge)
   ![plataforma](https://img.shields.io/badge/plataforma-Android-1c1b21?style=for-the-badge)
 </div>

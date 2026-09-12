@@ -51,6 +51,8 @@
     <string name="status_unmounted">unmounted</string>
     <string name="status_missing">source missing</string>
     <string name="status_unknown">unchecked</string>
+    <string name="open_in_explorer">Open in file explorer</string>
+    <string name="no_file_explorer">No file explorer app was found</string>
     <string name="about">About</string>
     <string name="version_fmt">version %1$s</string>
     <string name="tools">Tools</string>

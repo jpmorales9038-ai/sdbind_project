@@ -51,6 +51,8 @@
     <string name="status_unmounted">no montado</string>
     <string name="status_missing">origen ausente</string>
     <string name="status_unknown">sin comprobar</string>
+    <string name="open_in_explorer">Abrir en el explorador de archivos</string>
+    <string name="no_file_explorer">No se encontró un explorador de archivos</string>
     <string name="about">Acerca de</string>
     <string name="version_fmt">versión %1$s</string>
     <string name="tools">Herramientas</string>
