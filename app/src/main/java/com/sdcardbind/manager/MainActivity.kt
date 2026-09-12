@@ -251,6 +251,17 @@ fun BindApp() {
         }
     }
 
+    fun unmountAllNow(auto: Boolean = false) {
+        scope.launch {
+            busy = true
+            popupQuietUntil = System.currentTimeMillis() + 8000
+            RootOps.unmountAll()
+            refresh()
+            if (auto) snack = context.getString(R.string.auto_unmounted)
+            busy = false
+        }
+    }
+
     LaunchedEffect(Unit) {
         rootOk = RootOps.isRootAvailable()
         if (rootOk == true) refresh()
@@ -280,7 +291,7 @@ fun BindApp() {
                     UsbManager.ACTION_USB_DEVICE_DETACHED,
                     Intent.ACTION_MEDIA_UNMOUNTED,
                     Intent.ACTION_MEDIA_REMOVED,
-                    Intent.ACTION_MEDIA_BAD_REMOVAL -> refresh(false)
+                    Intent.ACTION_MEDIA_BAD_REMOVAL -> unmountAllNow(auto = true)
                 }
             }
         }
@@ -442,15 +453,7 @@ fun BindApp() {
                                     busy = false
                                 }
                             },
-                            onUnmount = {
-                                scope.launch {
-                                    busy = true
-                                    popupQuietUntil = System.currentTimeMillis() + 8000
-                                    RootOps.unmountAll()
-                                    refresh()
-                                    busy = false
-                                }
-                            }
+                            onUnmount = { unmountAllNow() }
                         )
                     }
                 }

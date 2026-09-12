@@ -20,6 +20,7 @@
     <string name="update_saved_downloads">Guardada en Descargas/sdbind_update.zip</string>
     <string name="binds_applied">Vínculos aplicados</string>
     <string name="mount_failed">Error al montar</string>
+    <string name="auto_unmounted">Desmontado (se retiró la unidad)</string>
     <string name="this_bind">este vínculo</string>
     <string name="delete_bind">Eliminar vínculo</string>
     <string name="delete_bind_body">Se elimina «%1$s» de forma permanente y se desmonta si está montado.</string>
