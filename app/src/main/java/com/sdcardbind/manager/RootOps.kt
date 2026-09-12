@@ -106,7 +106,11 @@ object RootOps {
             val awk = "awk -v p=" + shQuote(raw) + " '\$2 ~ \"^\" p \"/[^/]+\$\" { print \$2 }' /proc/1/mounts 2>/dev/null | sort -u"
             return exec(awk).filter { it.isNotBlank() }.map { normalizeDir(it) }
         }
-        val cmd = "find " + shQuote(raw) + " -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort"
+        // nsenter -t 1 -m: la app corre en su propio mount namespace (aislado por el sandbox
+        // de almacenamiento con alcance/FUSE), así que un bind hecho en el namespace de init
+        // (donde vive el mount real, ver functions.sh) queda invisible acá si no entramos a
+        // ese namespace primero — mismo motivo por el que mount/umount ya usan nsenter.
+        val cmd = "nsenter -t 1 -m -- find " + shQuote(raw) + " -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort"
         return exec(cmd).filter { it.isNotBlank() }.map { normalizeDir(it) }
     }
 
@@ -114,7 +118,10 @@ object RootOps {
     suspend fun listEntries(path: String): List<FileEntry> {
         val raw = path.trimEnd('/').ifBlank { "/" }
         // "%y" = tipo (d/f/l...), "%s" = tamaño en bytes, "%f" = solo el nombre (sin ruta).
-        val cmd = "find " + shQuote(raw) + " -mindepth 1 -maxdepth 1 -printf '%y|%s|%f\\n' 2>/dev/null"
+        // Mismo criterio de nsenter que en listSubdirectories: sin esto, una carpeta recién
+        // montada por bind aparece vacía acá aunque un explorador root "normal" (que sí ve el
+        // namespace global) la muestre con contenido.
+        val cmd = "nsenter -t 1 -m -- find " + shQuote(raw) + " -mindepth 1 -maxdepth 1 -printf '%y|%s|%f\\n' 2>/dev/null"
         return exec(cmd).mapNotNull { line ->
             val parts = line.split("|", limit = 3)
             if (parts.size < 3 || parts[2].isBlank()) return@mapNotNull null
@@ -131,7 +138,10 @@ object RootOps {
     suspend fun deleteEntry(path: String, isDir: Boolean): Boolean = withContext(Dispatchers.IO) {
         val p = (if (isDir) normalizeDir(path) else path).trimEnd('/')
         if (p.isBlank() || isUnsafeDest(p)) return@withContext false
-        val cmd = if (isDir) "rm -rf ${shQuote(p)}" else "rm -f ${shQuote(p)}"
+        // Mismo motivo de nsenter que en listEntries: si `p` cuelga de una carpeta con bind,
+        // sin esto el rm actúa sobre la vista vacía del namespace de la app, no sobre el
+        // contenido real montado.
+        val cmd = if (isDir) "nsenter -t 1 -m -- rm -rf ${shQuote(p)}" else "nsenter -t 1 -m -- rm -f ${shQuote(p)}"
         Shell.cmd(cmd).exec().isSuccess
     }
 

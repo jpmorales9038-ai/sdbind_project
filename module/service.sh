@@ -10,3 +10,9 @@ sleep 5
 
 log "== service: intento de montaje tras boot_completed =="
 apply_mounts
+
+log "== service: vigilando desconexión de SD/OTG =="
+while true; do
+    sleep 5
+    watch_and_prune
+done

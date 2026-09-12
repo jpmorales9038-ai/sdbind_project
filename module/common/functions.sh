@@ -154,6 +154,25 @@ unmount_all() {
     each_entry _unmount_cb
 }
 
+_watch_cb() {
+    SRC="$1"; DEST="$2"; ENABLED="$3"
+    [ "$ENABLED" = "1" ] || return 0
+    is_mounted "$DEST" || return 0
+    # Sin nsenter a propósito: el origen (SD/OTG) no pasa por el FUSE de storage por app,
+    # así que cualquier proceso ve igual si sigue presente o no (mismo criterio que
+    # wait_for_path, que tampoco usa run_global para esto).
+    if [ ! -d "$SRC" ]; then
+        log "Auto-desmontado (origen desconectado): $SRC -> $DEST"
+        unmount_one "$DEST"
+    fi
+}
+
+# Recorre todos los binds habilitados y desmonta los que quedaron "colgando" porque su
+# origen (tarjeta SD u OTG) ya no está conectado.
+watch_and_prune() {
+    each_entry _watch_cb
+}
+
 remove_entry() {
     SRC=$(ensure_slash "$1")
     DEST=$(ensure_slash "$2")
