@@ -886,7 +886,7 @@ private fun HomePane(
                 Spacer(Modifier.height(16.dp))
                 StorageHero(volumes, playToken, onRefreshStorage)
                 Spacer(Modifier.height(16.dp))
-                ActionButtons(busy, entries.isNotEmpty(), onApply, onUnmount)
+                ActionButtons(busy, entries.isNotEmpty(), volumes.any { it.kind == VolumeKind.EXTERNAL }, onApply, onUnmount)
                 Spacer(Modifier.height(24.dp))
             }
             Column(
@@ -907,7 +907,7 @@ private fun HomePane(
             Spacer(Modifier.height(28.dp))
             BindList(entries, onDelete, onOpen)
             Spacer(Modifier.height(16.dp))
-            ActionButtons(busy, entries.isNotEmpty(), onApply, onUnmount)
+            ActionButtons(busy, entries.isNotEmpty(), volumes.any { it.kind == VolumeKind.EXTERNAL }, onApply, onUnmount)
             Spacer(Modifier.height(96.dp))
         }
     }
@@ -956,15 +956,18 @@ private fun BindList(
 }
 
 @Composable
-private fun ActionButtons(busy: Boolean, hasEntries: Boolean, onApply: () -> Unit, onUnmount: () -> Unit) {
+private fun ActionButtons(busy: Boolean, hasEntries: Boolean, hasExternal: Boolean, onApply: () -> Unit, onUnmount: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Button(
         onClick = onApply,
-        enabled = !busy && hasEntries,
+        enabled = !busy && hasEntries && hasExternal,
         modifier = Modifier.fillMaxWidth().height(52.dp),
         shape = MaterialTheme.shapes.large
     ) { Text(stringResource(R.string.save_mount), fontWeight = FontWeight.Bold) }
     Spacer(Modifier.height(8.dp))
+    // "Desmontar todo" queda siempre disponible a propósito (no depende de hasExternal): es
+    // la vía manual de escape si algo quedó mal desmontado justo después de retirar la
+    // unidad, aunque el auto-desmontado ya debería encargarse solo.
     TextButton(onClick = onUnmount, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.unmount_all), color = cs.error)
     }

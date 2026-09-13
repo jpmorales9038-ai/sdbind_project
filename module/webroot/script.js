@@ -104,6 +104,7 @@ function syncEmpty() {
   if (!emptyHint || !rowsEl) return;
   if (rowsEl.children.length > 0) emptyHint.classList.add("hidden");
   else emptyHint.classList.remove("hidden");
+  updateFabState();
 }
 
 function addRow(src, dest, enabled, status) {
@@ -202,11 +203,20 @@ var hasExternalVol = false;
 // Sin ninguna unidad externa (SD/OTG) no hay de dónde elegir un origen — mismo criterio
 // que en la app: en vez de ocultar el botón, se apaga visualmente y el click explica por
 // qué, en lugar de abrir el selector directo a una carpeta vacía.
+// Sin ninguna unidad externa (SD/OTG) no hay de dónde elegir un origen, ni nada real para
+// montar o desmontar — mismo criterio para el FAB y los dos botones de acción.
 function updateFabState() {
   var fab = document.getElementById("fab");
-  if (!fab) return;
-  if (currentTabName !== "home") { fab.className = "fab hidden"; return; }
-  fab.className = hasExternalVol ? "fab" : "fab disabled";
+  if (fab) {
+    if (currentTabName !== "home") fab.className = "fab hidden";
+    else fab.className = hasExternalVol ? "fab" : "fab disabled";
+  }
+  var saveBtn = document.getElementById("saveApplyBtn");
+  var hasEntries = !!(rowsEl && rowsEl.children.length > 0);
+  if (saveBtn) saveBtn.disabled = !hasExternalVol || !hasEntries;
+  // "Desmontar todo" queda siempre disponible a propósito: es la vía manual de escape si
+  // algo quedó mal desmontado justo después de retirar la unidad (el auto-desmontado ya
+  // debería encargarse solo, pero esto no depende de que haya una unidad conectada).
 }
 
 function volKeyFromStdout(s) {
