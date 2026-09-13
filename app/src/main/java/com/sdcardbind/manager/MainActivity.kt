@@ -499,10 +499,21 @@ fun BindApp() {
             .navigationBarsPadding()
             .padding(bottom = 84.dp, end = 16.dp)
     ) {
+        // Sin ninguna unidad externa (SD/OTG) montada no hay de dónde elegir un origen —
+        // FloatingActionButton no tiene un parámetro "enabled" propio, así que se lo simula:
+        // colores apagados (surfaceVariant en vez del container de color) y el click, en vez
+        // de abrir el selector, solo avisa por qué está apagado.
+        val hasExternal = volumes.any { it.kind == VolumeKind.EXTERNAL }
         FloatingActionButton(
-            onClick = { flow = Flow.PickSource; pendingSource = "" },
-            containerColor = cs.primaryContainer,
-            contentColor = cs.onPrimaryContainer,
+            onClick = {
+                if (hasExternal) {
+                    flow = Flow.PickSource; pendingSource = ""
+                } else {
+                    snack = context.getString(R.string.no_external_hint)
+                }
+            },
+            containerColor = if (hasExternal) cs.primaryContainer else cs.surfaceVariant,
+            contentColor = if (hasExternal) cs.onPrimaryContainer else cs.onSurfaceVariant.copy(alpha = 0.6f),
             shape = CircleShape
         ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_bind)) }
     }

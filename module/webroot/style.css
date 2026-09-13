@@ -184,6 +184,7 @@ h2 { font-size: 18px; margin: 0 0 12px; }
   font-size: 28px; line-height: 1; cursor: pointer;
 }
 .fab.danger { background: var(--danger); color: var(--on-danger); font-size: 22px; }
+.fab.disabled { background: var(--surface-2); color: var(--muted); opacity: .7; }
 
 .nav-scrim {
   position: fixed; left: 0; right: 0; bottom: 0;

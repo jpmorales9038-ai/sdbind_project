@@ -196,6 +196,18 @@ function refreshLog() {
 }
 
 var lastVolKey = "";
+var currentTabName = "home";
+var hasExternalVol = false;
+
+// Sin ninguna unidad externa (SD/OTG) no hay de dónde elegir un origen — mismo criterio
+// que en la app: en vez de ocultar el botón, se apaga visualmente y el click explica por
+// qué, en lugar de abrir el selector directo a una carpeta vacía.
+function updateFabState() {
+  var fab = document.getElementById("fab");
+  if (!fab) return;
+  if (currentTabName !== "home") { fab.className = "fab hidden"; return; }
+  fab.className = hasExternalVol ? "fab" : "fab disabled";
+}
 
 function volKeyFromStdout(s) {
   return String(s).split("\n").map(function (l) {
@@ -301,6 +313,8 @@ function loadStorage(forceAnim) {
 function paintStorageLists(internals, externals, forceAnim) {
     var box = document.getElementById("rings");
     if (!box) return;
+    hasExternalVol = externals.length > 0;
+    updateFabState();
     var key = internals.concat(externals).map(function (v) { return v.kind + ":" + baseName(v.path); }).join("|");
     if (!forceAnim && key === lastVolKey && box.children.length) {
       lastVolKey = key;
@@ -354,6 +368,7 @@ function layoutPill() {
 }
 
 function switchTab(tab) {
+  currentTabName = tab;
   var chips = document.querySelectorAll(".navchip");
   for (var i = 0; i < chips.length; i++) {
     chips[i].className = chips[i].getAttribute("data-tab") === tab ? "navchip on" : "navchip";
@@ -364,7 +379,7 @@ function switchTab(tab) {
   document.getElementById("logPane").className = tab === "log" ? "pane-log" : "pane-log hidden";
   var about = document.getElementById("aboutPane");
   if (about) about.className = tab === "about" ? "pane-about" : "pane-about hidden";
-  document.getElementById("fab").className = tab === "home" ? "fab" : "fab hidden";
+  updateFabState();
   document.getElementById("clearLogFab").className = tab === "log" ? "fab danger" : "fab danger hidden";
   if (tab === "log") refreshLog();
   if (tab === "about") loadAboutVer();
@@ -476,7 +491,10 @@ function loadPicker() {
   });
 }
 
-document.getElementById("fab").onclick = function () { openPicker("src"); };
+document.getElementById("fab").onclick = function () {
+  if (!hasExternalVol) { toast(t("no_external_hint")); return; }
+  openPicker("src");
+};
 document.getElementById("clearLogFab").onclick = function () {
   sh(WEBCTL + " clearlog").then(refreshLog).then(function () { toast(t("log_cleared")); })
     .catch(function (err) { toast(err.message || String(err)); });

@@ -23,6 +23,7 @@
     <string name="auto_unmounted">Desmontado (se retiró la unidad)</string>
     <string name="clear_log">Borrar registro</string>
     <string name="log_cleared">Registro borrado</string>
+    <string name="no_external_hint">Conectá una SD u OTG para poder vincular una carpeta</string>
     <string name="this_bind">este vínculo</string>
     <string name="delete_bind">Eliminar vínculo</string>
     <string name="delete_bind_body">Se elimina «%1$s» de forma permanente y se desmonta si está montado.</string>
