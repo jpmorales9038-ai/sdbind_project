@@ -406,10 +406,46 @@ function openPicker(step) {
     picker.ok.textContent = t("link_mount");
   }
   picker.el.className = "picker";
+  // El picker vive dentro de la misma página (no es una navegación real), así que el
+  // gesto/botón de volver atrás del sistema no tenía nada que interceptar y terminaba
+  // sacando de la WebUI directo a la lista de módulos de KernelSU. Empujamos una entrada de
+  // historial acá y la consumimos en el popstate de abajo, para que el back se quede adentro
+  // del picker en vez de salir.
+  pushPickerHistory();
   loadPicker();
 }
 
 function closePicker() { picker.el.className = "picker hidden"; }
+
+function goUpPicker() {
+  var t = picker.current.replace(/\/+$/, "");
+  var i = t.lastIndexOf("/");
+  picker.current = i > 0 ? t.slice(0, i) : "/";
+  loadPicker();
+}
+
+function backStepPicker() {
+  if (picker.step === "dst") openPicker("src");
+  else closePicker();
+}
+
+function pushPickerHistory() {
+  try { history.pushState({ sdbindPicker: true }, "", location.href); } catch (e) {}
+}
+
+window.addEventListener("popstate", function () {
+  if (picker.el.classList.contains("hidden")) return;
+  var cur = picker.current.replace(/\/+$/, "");
+  if (cur) {
+    // Mismo criterio que "Subir un nivel": mientras se pueda subir, el back sube en vez de
+    // cerrar. backStepPicker() empuja su propia entrada cuando corresponde (dst -> src); acá
+    // hace falta empujar de nuevo porque el "subir nivel" no pasa por openPicker().
+    goUpPicker();
+    pushPickerHistory();
+  } else {
+    backStepPicker();
+  }
+});
 
 function loadPicker() {
   picker.path.textContent = picker.current;
@@ -440,16 +476,8 @@ function loadPicker() {
 }
 
 document.getElementById("fab").onclick = function () { openPicker("src"); };
-document.getElementById("pickerBack").onclick = function () {
-  if (picker.step === "dst") openPicker("src");
-  else closePicker();
-};
-document.getElementById("pickerUp").onclick = function () {
-  var t = picker.current.replace(/\/+$/, "");
-  var i = t.lastIndexOf("/");
-  picker.current = i > 0 ? t.slice(0, i) : "/";
-  loadPicker();
-};
+document.getElementById("pickerBack").onclick = backStepPicker;
+document.getElementById("pickerUp").onclick = goUpPicker;
 var chipBtns = document.querySelectorAll(".chips button");
 for (var c = 0; c < chipBtns.length; c++) {
   chipBtns[c].onclick = function () {

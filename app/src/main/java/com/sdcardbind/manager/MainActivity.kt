@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -1380,6 +1381,15 @@ private fun FolderPickerScreen(
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
+    // Mismo criterio que el botón "Subir un nivel": si hay a dónde subir, el gesto/botón de
+    // volver atrás del sistema sube un nivel en vez de sacarte de la pantalla entera; recién
+    // al llegar arriba de todo, un back más hace lo que hacía onBack (volver al paso anterior
+    // del flujo). Antes esto no estaba interceptado y el gesto salía directo de la app.
+    BackHandler {
+        val trimmed = current.trimEnd('/')
+        if (trimmed.isEmpty()) onBack() else current = trimmed.substringBeforeLast("/").ifBlank { "/" }
+    }
+
     fun load(path: String) {
         loading = true
         scope.launch {
@@ -1527,6 +1537,13 @@ private fun FileBrowserScreen(startPath: String, onBack: () -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var pendingDelete by remember { mutableStateOf<FileEntry?>(null) }
     val scope = rememberCoroutineScope()
+
+    // Mismo criterio que en FolderPickerScreen: el back del sistema sube un nivel mientras
+    // se pueda, y recién al tope de todo cae a onBack (cerrar el explorador).
+    BackHandler {
+        val trimmed = current.trimEnd('/')
+        if (trimmed.isEmpty()) onBack() else current = normalizeDir(trimmed.substringBeforeLast("/").ifBlank { "/" })
+    }
 
     fun load(path: String) {
         loading = true
