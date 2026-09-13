@@ -36,7 +36,7 @@
     <string name="binds">Binds</string>
     <string name="nothing_bound">Nothing bound yet</string>
     <string name="nothing_bound_hint">Tap + and pick source and destination</string>
-    <string name="save_mount">Save and mount</string>
+    <string name="save_mount">Mount all</string>
     <string name="unmount_all">Unmount all</string>
     <string name="storage">Storage</string>
     <string name="long_press_refresh">Long-press to refresh</string>

@@ -36,7 +36,7 @@
     <string name="binds">Vínculos</string>
     <string name="nothing_bound">Nada vinculado todavía</string>
     <string name="nothing_bound_hint">Pulsa + y elige origen y destino</string>
-    <string name="save_mount">Guardar y montar</string>
+    <string name="save_mount">Montar todo</string>
     <string name="unmount_all">Desmontar todo</string>
     <string name="storage">Almacenamiento</string>
     <string name="long_press_refresh">Mantén pulsado para actualizar</string>

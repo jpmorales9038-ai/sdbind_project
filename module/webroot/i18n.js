@@ -9,7 +9,7 @@ var I18N = {
   es: {
     home: "Inicio", log: "Registro", about: "Acerca de",
     storage: "Almacenamiento", binds: "Vínculos",
-    save_mount: "Guardar y montar", unmount_all: "Desmontar todo",
+    save_mount: "Montar todo", unmount_all: "Desmontar todo",
     empty_binds: "Nada vinculado todavía. Toca + y elige origen y destino.",
     add: "Añadir vínculo",
     checking: "comprobando…", connected: "conectado", no_access: "sin acceso",
@@ -59,7 +59,7 @@ var I18N = {
   "es-ES": {
     home: "Inicio", log: "Registro", about: "Acerca de",
     storage: "Almacenamiento", binds: "Vínculos",
-    save_mount: "Guardar y montar", unmount_all: "Desmontar todo",
+    save_mount: "Montar todo", unmount_all: "Desmontar todo",
     empty_binds: "Nada vinculado todavía. Pulsa + y elige origen y destino.",
     add: "Añadir vínculo",
     checking: "comprobando…", connected: "conectado", no_access: "sin acceso",
@@ -109,7 +109,7 @@ var I18N = {
   en: {
     home: "Home", log: "Log", about: "About",
     storage: "Storage", binds: "Binds",
-    save_mount: "Save and mount", unmount_all: "Unmount all",
+    save_mount: "Mount all", unmount_all: "Unmount all",
     empty_binds: "Nothing bound yet. Tap + and pick source and destination.",
     add: "Add bind",
     checking: "checking…", connected: "connected", no_access: "no access",
