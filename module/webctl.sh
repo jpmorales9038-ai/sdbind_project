@@ -21,6 +21,12 @@ case "$1" in
         ;;
 
     status)
+        # Auto-heal antes de reportar: si el origen de algún bind ya no está (se retiró la
+        # SD/OTG), lo desmonta acá mismo antes de listar — así "status" siempre refleja la
+        # realidad al toque, sin depender de que el loop de service.sh (cada 2s) ya haya
+        # pasado. Lo aprovechan tanto la WebUI como la app nativa, que llaman a este mismo
+        # comando.
+        watch_and_prune
         [ -f "$CONF" ] || exit 0
         while IFS='|' read -r SRC DEST ENABLED || [ -n "$SRC" ]; do
             [ -z "$SRC" ] && continue

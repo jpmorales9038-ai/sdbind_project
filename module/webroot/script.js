@@ -713,6 +713,11 @@ function startVolumeWatch() {
   startVolumeWatch._id = setInterval(function () {
     if (!hasBridge()) return;
     loadStorage(false);
+    // Mismo criterio que loadStorage: sin este poll, la lista de Vínculos se cargaba una
+    // sola vez y quedaba "montado" en pantalla aunque el bind ya se hubiera caído solo al
+    // retirar la SD/OTG (el webctl.sh status ya se auto-cura, pero si nadie vuelve a
+    // pedirlo la WebUI nunca se entera).
+    loadStatus().catch(function () {});
   }, 2000);
 }
 
