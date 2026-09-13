@@ -104,10 +104,11 @@ mount_one() {
     # (típico: la raíz de /mnt/media_rw/<id> con la SD montada por separado debajo, o
     # cualquier origen que el usuario elija que resulte "contener" otro mount), un bind
     # simple NO copia ese contenido anidado — queda como carpeta vacía del lado del destino,
-    # aunque el resto sí se vea bien. --rbind sí lo arrastra. make-rprivate evita que la
-    # propagación del origen (si viniera compartida) haga de las suyas en el destino.
+    # aunque el resto sí se vea bien. --rbind sí lo arrastra.
+    # (Antes había acá un "mount --make-rprivate" defensivo; el mount de Android/toybox no
+    # soporta ese flag, cae a su modo de buscar en /etc/fstab -que no existe en Android- y
+    # llenaba el log con "mount: bad /etc/fstab". Se saca: --rbind solo ya funciona bien.)
     if run_global mount --rbind "$(strip_slash "$SRC")" "$(strip_slash "$DEST")" 2>>"$LOG"; then
-        run_global mount --make-rprivate "$(strip_slash "$DEST")" 2>>"$LOG"
         run_global chcon -R u:object_r:media_rw_data_file:s0 "$(strip_slash "$DEST")" 2>/dev/null
         log "OK: $SRC -> $DEST"
         return 0
