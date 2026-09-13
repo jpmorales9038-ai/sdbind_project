@@ -365,6 +365,7 @@ function switchTab(tab) {
   var about = document.getElementById("aboutPane");
   if (about) about.className = tab === "about" ? "pane-about" : "pane-about hidden";
   document.getElementById("fab").className = tab === "home" ? "fab" : "fab hidden";
+  document.getElementById("clearLogFab").className = tab === "log" ? "fab danger" : "fab danger hidden";
   if (tab === "log") refreshLog();
   if (tab === "about") loadAboutVer();
   [0, 30, 80, 160, 280, 480].forEach(function (ms) {
@@ -476,6 +477,10 @@ function loadPicker() {
 }
 
 document.getElementById("fab").onclick = function () { openPicker("src"); };
+document.getElementById("clearLogFab").onclick = function () {
+  sh(WEBCTL + " clearlog").then(refreshLog).then(function () { toast(t("log_cleared")); })
+    .catch(function (err) { toast(err.message || String(err)); });
+};
 document.getElementById("pickerBack").onclick = backStepPicker;
 document.getElementById("pickerUp").onclick = goUpPicker;
 var chipBtns = document.querySelectorAll(".chips button");

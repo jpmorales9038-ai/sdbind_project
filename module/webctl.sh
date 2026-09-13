@@ -82,6 +82,12 @@ case "$1" in
         echo "DONE"
         ;;
 
+    clearlog)
+        : > "$LOG"
+        log "Registro borrado a mano"
+        echo "DONE"
+        ;;
+
     log)
         tail -n 150 "$MODDIR/mount.log" 2>/dev/null
         ;;

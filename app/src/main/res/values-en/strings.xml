@@ -21,6 +21,8 @@
     <string name="binds_applied">Binds applied</string>
     <string name="mount_failed">Couldn’t mount</string>
     <string name="auto_unmounted">Unmounted (drive removed)</string>
+    <string name="clear_log">Clear log</string>
+    <string name="log_cleared">Log cleared</string>
     <string name="this_bind">this bind</string>
     <string name="delete_bind">Delete bind</string>
     <string name="delete_bind_body">“%1$s” will be removed permanently and unmounted if needed.</string>

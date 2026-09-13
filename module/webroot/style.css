@@ -9,6 +9,7 @@
   --surface-2: #26252c;
   --secondary: #c48aa8;
   --danger: #ffb4ab;
+  --on-danger: #690005;
   --ok: #8fcb9a;
   --warn: #e8c07a;
   --radius: 28px;
@@ -30,6 +31,7 @@
     --surface-2: #e4e0ea;
     --secondary: #8b4d6b;
     --danger: #ba1a1a;
+    --on-danger: #ffffff;
     --ok: #3b6d45;
     --warn: #8a5b00;
     --pill-border: rgba(0,0,0,.10);
@@ -181,6 +183,7 @@ h2 { font-size: 18px; margin: 0 0 12px; }
   border: 0; background: var(--primary); color: var(--on-primary);
   font-size: 28px; line-height: 1; cursor: pointer;
 }
+.fab.danger { background: var(--danger); color: var(--on-danger); font-size: 22px; }
 
 .nav-scrim {
   position: fixed; left: 0; right: 0; bottom: 0;

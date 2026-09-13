@@ -263,6 +263,14 @@ fun BindApp() {
         }
     }
 
+    fun clearLogNow() {
+        scope.launch {
+            RootOps.clearLog()
+            log = RootOps.tailLog()
+            snack = context.getString(R.string.log_cleared)
+        }
+    }
+
     LaunchedEffect(Unit) {
         rootOk = RootOps.isRootAvailable()
         if (rootOk == true) refresh()
@@ -497,6 +505,22 @@ fun BindApp() {
             contentColor = cs.onPrimaryContainer,
             shape = CircleShape
         ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_bind)) }
+    }
+    AnimatedVisibility(
+        visible = screen == "tabs" && currentTab == Tab.Log && rootOk == true,
+        enter = scaleIn(floatSpring) + fadeIn(),
+        exit = scaleOut() + fadeOut(),
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .navigationBarsPadding()
+            .padding(bottom = 84.dp, end = 16.dp)
+    ) {
+        FloatingActionButton(
+            onClick = { clearLogNow() },
+            containerColor = cs.errorContainer,
+            contentColor = cs.onErrorContainer,
+            shape = CircleShape
+        ) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.clear_log)) }
     }
     snack?.let {
         Snackbar(

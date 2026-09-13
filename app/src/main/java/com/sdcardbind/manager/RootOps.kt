@@ -211,6 +211,10 @@ object RootOps {
         return exec("sh $WEBCTL log").joinToString("\n")
     }
 
+    suspend fun clearLog(): Boolean = withContext(Dispatchers.IO) {
+        Shell.cmd("sh $WEBCTL clearlog").exec().isSuccess
+    }
+
     suspend fun storageVolumes(): List<StorageVolume> {
         val fromCtl = exec("sh $WEBCTL storage").mapNotNull { parseStorageLine(it) }
         val fromDf = fallbackDf()
