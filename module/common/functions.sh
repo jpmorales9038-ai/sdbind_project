@@ -180,6 +180,24 @@ unmount_all() {
     each_entry _unmount_cb
 }
 
+MISS_DIR="$MODDIR/.watch_grace"
+# Con poca RAM, Android puede matar y reiniciar por un instante el proceso que sirve
+# /mnt/media_rw (FUSE/MediaProvider): durante ese lapso "$SRC" da falso negativo aunque la
+# SD/OTG siga físicamente conectada. GRACE_SECONDS es cuánto tiene que faltar el origen, de
+# forma sostenida entre chequeos, antes de darlo por desconectado de verdad.
+GRACE_SECONDS=8
+
+# Marcador por DEST con el instante (epoch) en que se lo vio faltar por primera vez. No se
+# bloquea acá con un sleep/retry: esta función corre también dentro de "status"
+# (webctl.sh), al que la app le pregunta cada ~1.5s para refrescar la pantalla, y una
+# espera de varios segundos ahí congelaría la UI. En cambio, cada llamada (separada en el
+# tiempo por el propio loop de service.sh o por el polling de la app) solo anota o revisa
+# la marca, así el margen se cubre solo repitiendo chequeos rápidos.
+_miss_marker() {
+    mkdir -p "$MISS_DIR" 2>/dev/null
+    echo "$MISS_DIR/$(echo "$1" | tr '/ ' '__')"
+}
+
 _watch_cb() {
     SRC="$1"; DEST="$2"; ENABLED="$3"
     [ "$ENABLED" = "1" ] || return 0
@@ -187,14 +205,30 @@ _watch_cb() {
     # Sin nsenter a propósito: el origen (SD/OTG) no pasa por el FUSE de storage por app,
     # así que cualquier proceso ve igual si sigue presente o no (mismo criterio que
     # wait_for_path, que tampoco usa run_global para esto).
-    if [ ! -d "$SRC" ]; then
-        log "Auto-desmontado (origen desconectado): $SRC -> $DEST"
+    marker=$(_miss_marker "$DEST")
+    if [ -d "$SRC" ]; then
+        rm -f "$marker" 2>/dev/null
+        return 0
+    fi
+    now=$(date +%s 2>/dev/null || echo 0)
+    if [ ! -f "$marker" ]; then
+        echo "$now" > "$marker" 2>/dev/null
+        return 0
+    fi
+    since=$(cat "$marker" 2>/dev/null)
+    case "$since" in
+        ''|*[!0-9]*) since="$now"; echo "$now" > "$marker" 2>/dev/null ;;
+    esac
+    elapsed=$((now - since))
+    if [ "$elapsed" -ge "$GRACE_SECONDS" ]; then
+        log "Auto-desmontado (origen desconectado ${elapsed}s): $SRC -> $DEST"
         unmount_one "$DEST"
+        rm -f "$marker" 2>/dev/null
     fi
 }
 
 # Recorre todos los binds habilitados y desmonta los que quedaron "colgando" porque su
-# origen (tarjeta SD u OTG) ya no está conectado.
+# origen (tarjeta SD u OTG) ya no está conectado (tras confirmarlo durante GRACE_SECONDS).
 watch_and_prune() {
     each_entry _watch_cb
 }
@@ -203,6 +237,7 @@ remove_entry() {
     SRC=$(ensure_slash "$1")
     DEST=$(ensure_slash "$2")
     unmount_one "$DEST"
+    rm -f "$(_miss_marker "$DEST")" 2>/dev/null
     [ -f "$CONF" ] || return 0
     tmp="$CONF.tmp.$$"
     : > "$tmp"
