@@ -52,7 +52,7 @@
     <string name="no_source">sin origen</string>
     <string name="no_dest">sin destino</string>
     <string name="status_mounted">montado</string>
-    <string name="status_unmounted">no montado</string>
+    <string name="status_present">presente</string>
     <string name="status_missing">origen ausente</string>
     <string name="status_unknown">sin comprobar</string>
     <string name="open_in_explorer">Abrir en el explorador de archivos</string>

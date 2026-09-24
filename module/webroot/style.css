@@ -140,7 +140,9 @@ h2 { font-size: 18px; margin: 0 0 12px; }
   background: var(--surface-2); color: var(--muted);
 }
 .status-tag.MOUNTED { background: rgba(143,203,154,.22); color: var(--ok); }
-.status-tag.UNMOUNTED { background: var(--surface-2); color: var(--muted); }
+/* El origen existe pero no está montado -> mismo verde que MOUNTED: lo que importa acá es
+   que la unidad está disponible, no si el bind sigue activo en este momento. */
+.status-tag.UNMOUNTED { background: rgba(143,203,154,.22); color: var(--ok); }
 .status-tag.SOURCE_MISSING { background: rgba(224,122,122,.22); color: var(--danger); }
 .iconbtn {
   background: none; border: 0; color: var(--danger);

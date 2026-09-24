@@ -52,7 +52,7 @@
     <string name="no_source">no source</string>
     <string name="no_dest">no destination</string>
     <string name="status_mounted">mounted</string>
-    <string name="status_unmounted">unmounted</string>
+    <string name="status_present">available</string>
     <string name="status_missing">source missing</string>
     <string name="status_unknown">unchecked</string>
     <string name="open_in_explorer">Open in file explorer</string>

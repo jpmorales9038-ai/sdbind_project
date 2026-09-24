@@ -1165,7 +1165,9 @@ private fun StatusChip(status: String) {
     val cs = MaterialTheme.colorScheme
     val (label, bg, fg) = when (status) {
         "MOUNTED" -> Triple(stringResource(R.string.status_mounted), cs.tertiaryContainer, cs.onTertiaryContainer)
-        "UNMOUNTED" -> Triple(stringResource(R.string.status_unmounted), cs.secondaryContainer, cs.onSecondaryContainer)
+        // El origen existe pero no está montado -> mismo verde que "montado": lo importante
+        // para el usuario es que la unidad está disponible, no si el bind sigue activo.
+        "UNMOUNTED" -> Triple(stringResource(R.string.status_present), cs.tertiaryContainer, cs.onTertiaryContainer)
         "SOURCE_MISSING" -> Triple(stringResource(R.string.status_missing), cs.errorContainer, cs.onErrorContainer)
         else -> Triple(stringResource(R.string.status_unknown), cs.surfaceContainerHighest, cs.onSurfaceVariant)
     }
