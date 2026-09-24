@@ -5,6 +5,11 @@ CONF="$MODDIR/mounts.conf"
 
 case "$1" in
     apply)
+        # SDBIND_FAST=1: esto es un tap interactivo (usuario esperando en pantalla), no el
+        # arranque — que wait_for_path no se ponga a esperar 15s por cada entrada de una
+        # unidad que ya no está conectada. Ver el comentario en wait_for_path.
+        SDBIND_FAST=1
+        export SDBIND_FAST
         unmount_all
         apply_mounts
         echo "DONE"

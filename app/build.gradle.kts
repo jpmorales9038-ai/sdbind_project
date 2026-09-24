@@ -12,8 +12,8 @@ android {
         applicationId = "com.sdcardbind.manager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 75
-        versionName = "2.8.7"
+        versionCode = 76
+        versionName = "2.8.8"
     }
 
     signingConfigs {

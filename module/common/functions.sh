@@ -71,6 +71,17 @@ is_mounted() {
 
 wait_for_path() {
     SRC="$1"
+    # SDBIND_FAST=1 lo pone webctl.sh cuando el "apply" viene de un tap interactivo del
+    # usuario (app o WebUI), donde esperar no tiene sentido: o el origen ya está ahí, o no
+    # va a aparecer por esperar. Sin esto, cada entrada de OTRA unidad que ya no está
+    # conectada suma sus propios 15s de espera antes de seguir con la siguiente — con dos o
+    # tres unidades desconectadas eso se siente como que la app se cuelga. La espera larga
+    # sigue existiendo para post-fs-data.sh/service.sh al arrancar, que es donde hace falta
+    # (el SD/OTG puede tardar un instante en aparecer recién booteado).
+    if [ "$SDBIND_FAST" = "1" ]; then
+        [ -d "$SRC" ]
+        return $?
+    fi
     i=0
     while [ ! -d "$SRC" ] && [ "$i" -lt 30 ]; do
         sleep 0.5
