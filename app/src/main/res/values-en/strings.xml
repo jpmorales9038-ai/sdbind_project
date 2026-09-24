@@ -85,6 +85,7 @@
     <string name="lang_en">English</string>
     <string name="log">Log</string>
     <string name="log_empty">(no logs yet)</string>
+    <string name="share_log">Share full log</string>
     <string name="up_one_level">Up one level</string>
     <string name="no_subfolders">No subfolders. You can use this one.</string>
     <string name="pick_inner_folder">Pick an inner folder, not storage root.</string>

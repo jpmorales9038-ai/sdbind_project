@@ -85,6 +85,7 @@
     <string name="lang_en">English</string>
     <string name="log">Registro</string>
     <string name="log_empty">(sin registros aún)</string>
+    <string name="share_log">Compartir registro completo</string>
     <string name="up_one_level">Subir un nivel</string>
     <string name="no_subfolders">Sin subcarpetas. Puedes usar esta.</string>
     <string name="pick_inner_folder">Elige una carpeta interior, no la raíz del almacenamiento.</string>

@@ -97,6 +97,12 @@ case "$1" in
         tail -n 150 "$MODDIR/mount.log" 2>/dev/null
         ;;
 
+    fulllog)
+        # Sin límite de líneas — usado por el botón "Compartir registro completo" de la app
+        # para juntar una sesión de diagnóstico entera, no solo lo último que entra en pantalla.
+        cat "$MODDIR/mount.log" 2>/dev/null
+        ;;
+
     storage)
         dump_storage
         ;;

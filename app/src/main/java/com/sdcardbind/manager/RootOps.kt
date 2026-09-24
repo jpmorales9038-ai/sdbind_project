@@ -211,6 +211,12 @@ object RootOps {
         return exec("sh $WEBCTL log").joinToString("\n")
     }
 
+    // Sin recorte de líneas, para juntar una sesión de diagnóstico completa (ver botón
+    // "Compartir registro completo" del tab Registro).
+    suspend fun fullLog(): String {
+        return exec("sh $WEBCTL fulllog").joinToString("\n")
+    }
+
     suspend fun clearLog(): Boolean = withContext(Dispatchers.IO) {
         Shell.cmd("sh $WEBCTL clearlog").exec().isSuccess
     }

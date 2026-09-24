@@ -1097,6 +1097,26 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
     }
 }
 
+/** Junta el log completo (root, sin recorte) en un archivo del caché propio de la app y lo
+ *  manda al selector de apps para compartir — mismo mecanismo de FileProvider que
+ *  openFileExternally, pero para ACTION_SEND en vez de ACTION_VIEW. */
+private fun shareLogFile(context: Context, content: String) {
+    runCatching {
+        val dir = File(context.cacheDir, "logs").apply { mkdirs() }
+        val file = File(dir, "sdbind_log_${System.currentTimeMillis()}.txt")
+        file.writeText(content.ifBlank { "(log vacío)" })
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, file.name))
+    }.onFailure {
+        Toast.makeText(context, context.getString(R.string.open_file_failed), Toast.LENGTH_SHORT).show()
+    }
+}
+
 /** Abre un archivo con la app externa que corresponda según su tipo (imagen, video, apk...). */
 private fun openFileExternally(context: Context, absolutePath: String) {
     val file = File(absolutePath)
@@ -1398,8 +1418,26 @@ private fun AboutMiniCard(modifier: Modifier, icon: ImageVector, title: String, 
 @Composable
 private fun LogPane(log: String) {
     val cs = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Text(stringResource(R.string.log), color = cs.onBackground, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.log),
+                color = cs.onBackground,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = {
+                scope.launch {
+                    val full = RootOps.fullLog()
+                    shareLogFile(context, full)
+                }
+            }) {
+                Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.share_log))
+            }
+        }
         Spacer(Modifier.height(16.dp))
         Box(
             Modifier

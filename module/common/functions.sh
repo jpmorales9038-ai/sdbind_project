@@ -218,8 +218,12 @@ LOW_MEM_MARKER="$MODDIR/.watch_grace/.low_mem_seen"
 # Poca RAM ahora mismo (según /proc/meminfo). Si no se puede leer, se asume que NO hay poca
 # RAM (falso negativo aquí es más seguro que pausar el conteo sin motivo real). Además deja
 # constancia de cuándo fue la última vez que se vio baja, para _low_mem_recently().
+_mem_avail_kb() {
+    awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null
+}
+
 _low_mem() {
-    avail=$(awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null)
+    avail=$(_mem_avail_kb)
     case "$avail" in
         ''|*[!0-9]*) return 1 ;;
     esac
@@ -242,6 +246,23 @@ _low_mem_recently() {
     esac
     now=$(date +%s 2>/dev/null || echo 0)
     [ $((now - since)) -lt "$LOW_MEM_STICKY_SECONDS" ]
+}
+
+# Log de una línea, como máximo una vez cada $3 segundos por $1 (clave arbitraria). Para
+# eventos que pueden repetirse chequeo tras chequeo mientras dura un episodio (saturación de
+# I/O, supresión por RAM baja) sin llenar mount.log de líneas idénticas durante minutos.
+_log_throttled() {
+    key="$1"; msg="$2"; interval="${3:-20}"
+    mkdir -p "$MISS_DIR" 2>/dev/null
+    f="$MISS_DIR/.throttle_$(echo "$key" | tr '/ ' '__')"
+    now=$(date +%s 2>/dev/null || echo 0)
+    last=0
+    [ -f "$f" ] && last=$(cat "$f" 2>/dev/null)
+    case "$last" in ''|*[!0-9]*) last=0 ;; esac
+    if [ $((now - last)) -ge "$interval" ]; then
+        echo "$now" > "$f" 2>/dev/null
+        log "$msg"
+    fi
 }
 
 # Punto de montaje del volumen (SD/OTG) que contiene a $1, si existe: /mnt/media_rw/<id>,
@@ -294,6 +315,14 @@ _watch_cb() {
     # wait_for_path, que tampoco usa run_global para esto).
     marker=$(_miss_marker "$DEST")
     if [ -d "$SRC" ]; then
+        if [ -f "$marker" ]; then
+            since=$(cat "$marker" 2>/dev/null)
+            case "$since" in ''|*[!0-9]*) since=0 ;; esac
+            now=$(date +%s 2>/dev/null || echo 0)
+            # DIAGNÓSTICO (build de logs): esto confirma que la ausencia fue transitoria y
+            # se resolvió sola, con la duración real de principio a fin.
+            log "Origen reapareció tras $((now - since))s de ausencia: $SRC -> $DEST"
+        fi
         rm -f "$marker" 2>/dev/null
         return 0
     fi
@@ -302,6 +331,8 @@ _watch_cb() {
         # hace poco) justo de RAM: es el momento en que más probable es que esto sea un
         # falso negativo y no una desconexión real. El marcador (si ya existía de antes)
         # queda congelado tal cual, a la espera de que la memoria termine de recuperarse.
+        # DIAGNÓSTICO: throttled porque puede repetirse chequeo tras chequeo mientras dura.
+        _log_throttled "$DEST.lowmem" "Origen ausente + RAM baja/reciente (mem=$(_mem_avail_kb)KB), conteo congelado: $SRC -> $DEST" 20
         return 0
     fi
     if _device_present "$SRC"; then
@@ -311,12 +342,18 @@ _watch_cb() {
         # el margen de abajo. Se limpia el marcador en vez de congelarlo (a diferencia de
         # _low_mem): acá sabemos que el origen está bien, así que un miss suelto posterior no
         # debería heredar un conteo viejo de otra causa.
+        # DIAGNÓSTICO: esta es la teoría de "saturación de I/O" en acción — si el problema
+        # real es otra cosa, esta línea NO debería aparecer justo antes de un desmontaje.
+        _log_throttled "$DEST.satlog" "Subcarpeta ausente pero el volumen SD/OTG sigue montado (I/O saturada, no se cuenta): $SRC" 15
         rm -f "$marker" 2>/dev/null
         return 0
     fi
     now=$(date +%s 2>/dev/null || echo 0)
     if [ ! -f "$marker" ]; then
         echo "$now" > "$marker" 2>/dev/null
+        # DIAGNÓSTICO: arranque de un episodio real de ausencia — ni RAM baja ni volumen
+        # presente lo explican, así que empieza a correr la cuenta de gracia de verdad.
+        log "Origen ausente de verdad, iniciando cuenta de gracia (mem=$(_mem_avail_kb)KB): $SRC -> $DEST"
         return 0
     fi
     since=$(cat "$marker" 2>/dev/null)
@@ -329,13 +366,37 @@ _watch_cb() {
         # evita un desmontaje si el proveedor reapareció, o si la RAM volvió a caer, justo
         # entre el watch_and_prune anterior y este.
         if [ -d "$SRC" ] || _device_present "$SRC" || _low_mem || _low_mem_recently; then
+            _log_throttled "$DEST.lastcheck" "Se cumplió el margen (${elapsed}s) pero la reconfirmación de último momento salvó a $SRC -> $DEST" 20
             rm -f "$marker" 2>/dev/null
             return 0
         fi
-        log "Auto-desmontado (origen desconectado ${elapsed}s): $SRC -> $DEST"
+        log "Auto-desmontado (origen desconectado ${elapsed}s, mem=$(_mem_avail_kb)KB): $SRC -> $DEST"
         unmount_one "$DEST"
         rm -f "$marker" 2>/dev/null
     fi
+}
+
+# Diagnóstico temporal (build de logs, ver comentario en service.sh): deja un timeline fijo
+# de RAM disponible + el estado real de cada bind (existe el origen / sigue el volumen
+# montado / sigue is_mounted el destino) cada pocos segundos, sin depender de que algo
+# "pase" para que quede constancia. Sirve para confirmar o descartar de una vez la teoría de
+# saturación de I/O bajo uso intensivo, en vez de seguir ajustando GRACE_SECONDS a ciegas.
+# Sacar (o dejar de llamar desde service.sh) una vez encontrada la causa real.
+heartbeat_log() {
+    avail=$(_mem_avail_kb)
+    line="HB mem=${avail:-?}KB"
+    if [ -f "$CONF" ]; then
+        while IFS='|' read -r SRC DEST ENABLED || [ -n "$SRC" ]; do
+            [ -z "$SRC" ] && continue
+            case "$SRC" in \#*) continue ;; esac
+            [ "$ENABLED" = "1" ] || continue
+            d_src=0; [ -d "$SRC" ] && d_src=1
+            d_vol=0; _device_present "$SRC" && d_vol=1
+            d_mnt=0; is_mounted "$DEST" && d_mnt=1
+            line="$line | $(basename "$DEST"): src=$d_src vol=$d_vol mounted=$d_mnt"
+        done < "$CONF"
+    fi
+    log "$line"
 }
 
 # Recorre todos los binds habilitados y desmonta los que quedaron "colgando" porque su
@@ -343,6 +404,7 @@ _watch_cb() {
 watch_and_prune() {
     each_entry _watch_cb
 }
+
 
 remove_entry() {
     SRC=$(ensure_slash "$1")

@@ -12,7 +12,14 @@ log "== service: intento de montaje tras boot_completed =="
 apply_mounts
 
 log "== service: vigilando desconexión de SD/OTG =="
+tick=0
 while true; do
     sleep 2
     watch_and_prune
+    # DIAGNÓSTICO (build de logs): timeline fijo cada ~10s, no depende de que pase algo.
+    tick=$((tick + 1))
+    if [ "$tick" -ge 5 ]; then
+        tick=0
+        heartbeat_log
+    fi
 done
