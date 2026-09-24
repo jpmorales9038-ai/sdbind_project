@@ -203,6 +203,36 @@ _low_mem() {
     [ "$avail" -lt "$LOW_MEM_KB" ]
 }
 
+# Punto de montaje del volumen (SD/OTG) que contiene a $1, si existe: /mnt/media_rw/<id>,
+# /storage/<id>, /mnt/runtime/default/<id> o /mnt/expand/<id>. Se lee de /proc/1/mounts, que
+# es tabla de montaje del kernel — no toca el filesystem del dispositivo en sí, así que
+# responde al toque aunque ese filesystem esté saturado de I/O.
+_media_root_for() {
+    p=$(strip_slash "$1")
+    [ -n "$p" ] || return 1
+    [ -r /proc/1/mounts ] || return 1
+    awk -v p="$p" '
+        $2 ~ /^\/mnt\/media_rw\/[^\/]+$/ || $2 ~ /^\/storage\/[^\/]+$/ ||
+        $2 ~ /^\/mnt\/runtime\/default\/[^\/]+$/ || $2 ~ /^\/mnt\/expand\/[^\/]+$/ {
+            mp = $2
+            if ((p == mp || index(p, mp "/") == 1) && length(mp) > best_len) {
+                best = mp; best_len = length(mp)
+            }
+        }
+        END { if (best_len > 0) { print best; exit 0 } exit 1 }
+    ' /proc/1/mounts
+}
+
+# La SD/OTG en sí sigue conectada (su propio punto de montaje sigue en la tabla del kernel),
+# más allá de que estat sobre una subcarpeta puntual esté fallando. Uso intensivo de la
+# carpeta (un juego leyendo/escribiendo mucho) puede poner lento o devolver error transitorio
+# al puente FUSE/MTP que sirve /mnt/media_rw bajo carga, sin que el volumen se haya ido —
+# _watch_cb usa esto para no confundir esa saturación con una desconexión real.
+_device_present() {
+    root=$(_media_root_for "$1")
+    [ -n "$root" ]
+}
+
 # Marcador por DEST con el instante (epoch) en que se lo vio faltar por primera vez. No se
 # bloquea acá con un sleep/retry: esta función corre también dentro de "status"
 # (webctl.sh), al que la app le pregunta cada ~1.5s para refrescar la pantalla, y una
@@ -231,6 +261,16 @@ _watch_cb() {
         # RAM: es el momento en que más probable es que esto sea un falso negativo y no una
         # desconexión real. El marcador (si ya existía de antes) queda congelado tal cual,
         # a la espera de que la memoria se recupere.
+        return 0
+    fi
+    if _device_present "$SRC"; then
+        # El volumen sigue conectado (su punto de montaje sigue ahí); esto es la subcarpeta
+        # puntual fallando por I/O intensa, no una desconexión. No se desmonta: si de verdad
+        # se desconecta, el punto de montaje del volumen entero desaparece y ahí sí se cuenta
+        # el margen de abajo. Se limpia el marcador en vez de congelarlo (a diferencia de
+        # _low_mem): acá sabemos que el origen está bien, así que un miss suelto posterior no
+        # debería heredar un conteo viejo de otra causa.
+        rm -f "$marker" 2>/dev/null
         return 0
     fi
     now=$(date +%s 2>/dev/null || echo 0)
