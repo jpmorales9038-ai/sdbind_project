@@ -1408,12 +1408,26 @@ private fun LogPane(log: String) {
                 .background(cs.surfaceContainerLowest)
                 .padding(16.dp)
         ) {
-            Text(
-                log.ifBlank { stringResource(R.string.log_empty) },
-                color = cs.tertiary,
-                fontSize = 11.sp,
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            )
+            // Al vaciar el log (botón de borrar), el texto anterior se desvanece deslizándose
+            // hacia arriba en vez de desaparecer de golpe; el mensaje de "log vacío" entra con
+            // un fundido suave por detrás.
+            AnimatedContent(
+                targetState = log,
+                transitionSpec = {
+                    (fadeIn(tween(220, delayMillis = 120)))
+                        .togetherWith(
+                            fadeOut(tween(220)) + slideOutVertically(tween(220)) { h -> -h / 3 }
+                        )
+                },
+                label = "logContent"
+            ) { text ->
+                Text(
+                    text.ifBlank { stringResource(R.string.log_empty) },
+                    color = cs.tertiary,
+                    fontSize = 11.sp,
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                )
+            }
         }
     }
 }
