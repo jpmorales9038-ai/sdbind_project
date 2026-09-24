@@ -192,10 +192,15 @@ MISS_DIR="$MODDIR/.watch_grace"
 # saturarse o reiniciarse solo por un momento, y mientras tanto SU PROPIO punto de montaje
 # puede faltar de /proc/1/mounts (lo que ve _device_present) más de esos 8s — no porque la
 # SD/OTG se haya desconectado, sino porque el proveedor tarda en reaparecer bajo carga.
-# 45s da margen de sobra para que el proveedor se recupere solo sin desmontar al usuario en
-# medio de una partida, mientras sigue detectando una desconexión real (que se sostiene
-# indefinidamente, no unos segundos) en un tiempo razonable.
-GRACE_SECONDS=45
+#
+# BUG (v2.8.13 y anteriores): 45s tampoco alcanzaba en uso REALMENTE intensivo y sostenido
+# (partidas largas con lecturas/escrituras pesadas todo el rato) en tarjetas SD lentas: el
+# proveedor puede tardar más de eso en reponerse, y para cuando el siguiente watch_and_prune
+# corre, la RAM ya se recuperó — _low_mem() ve "todo normal" y no llega a congelar el conteo
+# aunque la caída de memoria que causó el corte haya sido hace instantes. 120s da margen para
+# ese caso extremo sin dejar de detectar una desconexión real (que no se revierte sola) en un
+# tiempo razonable.
+GRACE_SECONDS=120
 
 # Umbral de RAM disponible (KB) por debajo del cual el sistema puede estar matando procesos
 # (low-memory killer) para liberar memoria — justo el escenario que GRACE_SECONDS por sí
@@ -203,14 +208,40 @@ GRACE_SECONDS=45
 # debajo de esto, un "$SRC" ausente es mucho menos confiable.
 LOW_MEM_KB=204800
 
+# Cuánto tiempo (s) seguimos tratando la RAM como "poco confiable" DESPUÉS de haberla visto
+# baja por última vez, no solo en el instante exacto del chequeo. Cubre el hueco de arriba:
+# una caída breve que ya se recuperó para el siguiente watch_and_prune sigue congelando el
+# conteo durante esta ventana, dándole tiempo al proveedor de FUSE/media a reponerse del todo.
+LOW_MEM_STICKY_SECONDS=90
+LOW_MEM_MARKER="$MODDIR/.watch_grace/.low_mem_seen"
+
 # Poca RAM ahora mismo (según /proc/meminfo). Si no se puede leer, se asume que NO hay poca
-# RAM (falso negativo aquí es más seguro que pausar el conteo sin motivo real).
+# RAM (falso negativo aquí es más seguro que pausar el conteo sin motivo real). Además deja
+# constancia de cuándo fue la última vez que se vio baja, para _low_mem_recently().
 _low_mem() {
     avail=$(awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null)
     case "$avail" in
         ''|*[!0-9]*) return 1 ;;
     esac
-    [ "$avail" -lt "$LOW_MEM_KB" ]
+    if [ "$avail" -lt "$LOW_MEM_KB" ]; then
+        mkdir -p "$MISS_DIR" 2>/dev/null
+        date +%s > "$LOW_MEM_MARKER" 2>/dev/null
+        return 0
+    fi
+    return 1
+}
+
+# La RAM estuvo baja hace poco (dentro de LOW_MEM_STICKY_SECONDS), aunque ahora mismo
+# _low_mem ya no la vea baja. Ver el comentario de GRACE_SECONDS arriba: esto es lo que
+# cubre una caída breve que ya se recuperó para cuando corre el siguiente chequeo.
+_low_mem_recently() {
+    [ -f "$LOW_MEM_MARKER" ] || return 1
+    since=$(cat "$LOW_MEM_MARKER" 2>/dev/null)
+    case "$since" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    now=$(date +%s 2>/dev/null || echo 0)
+    [ $((now - since)) -lt "$LOW_MEM_STICKY_SECONDS" ]
 }
 
 # Punto de montaje del volumen (SD/OTG) que contiene a $1, si existe: /mnt/media_rw/<id>,
@@ -266,11 +297,11 @@ _watch_cb() {
         rm -f "$marker" 2>/dev/null
         return 0
     fi
-    if _low_mem; then
-        # No sumamos ni arrancamos el conteo de gracia mientras el sistema está justo de
-        # RAM: es el momento en que más probable es que esto sea un falso negativo y no una
-        # desconexión real. El marcador (si ya existía de antes) queda congelado tal cual,
-        # a la espera de que la memoria se recupere.
+    if _low_mem || _low_mem_recently; then
+        # No sumamos ni arrancamos el conteo de gracia mientras el sistema está (o estuvo
+        # hace poco) justo de RAM: es el momento en que más probable es que esto sea un
+        # falso negativo y no una desconexión real. El marcador (si ya existía de antes)
+        # queda congelado tal cual, a la espera de que la memoria termine de recuperarse.
         return 0
     fi
     if _device_present "$SRC"; then
@@ -294,10 +325,10 @@ _watch_cb() {
     esac
     elapsed=$((now - since))
     if [ "$elapsed" -ge "$GRACE_SECONDS" ]; then
-        # Reconfirmación de último momento: barata (solo lee /proc/1/mounts, no toca el
-        # filesystem) y evita un desmontaje si el proveedor reapareció justo entre el
-        # watch_and_prune anterior y este.
-        if [ -d "$SRC" ] || _device_present "$SRC"; then
+        # Reconfirmación de último momento: barata (no toca el filesystem del origen) y
+        # evita un desmontaje si el proveedor reapareció, o si la RAM volvió a caer, justo
+        # entre el watch_and_prune anterior y este.
+        if [ -d "$SRC" ] || _device_present "$SRC" || _low_mem || _low_mem_recently; then
             rm -f "$marker" 2>/dev/null
             return 0
         fi
