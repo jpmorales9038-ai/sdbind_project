@@ -309,7 +309,22 @@ _miss_marker() {
 _watch_cb() {
     SRC="$1"; DEST="$2"; ENABLED="$3"
     [ "$ENABLED" = "1" ] || return 0
-    is_mounted "$DEST" || return 0
+    if ! is_mounted "$DEST"; then
+        # NUEVO (a partir de este log): el bind puede haberse caído solo sin que la SD/OTG
+        # se haya ido — el log confirma src=1 vol=1 sostenido mientras mounted pasa a 0,
+        # justo en el momento de RAM más baja. La causa más probable: el proveedor FUSE que
+        # sirve /storage/emulated/0 se reinicia por presión de memoria (Android puede matarlo
+        # y levantarlo de nuevo con RAM baja), lo que se lleva puesto cualquier bind montado
+        # encima de su punto de montaje viejo, aunque la SD/OTG en sí siga perfecta. Antes de
+        # esto, _watch_cb solo sabía protegerse de falsos desmontajes — nunca remontaba nada.
+        # Si el origen sigue ahí, lo remontamos solos en vez de dejarlo caído hasta que el
+        # usuario note que faltan archivos y tenga que tocar "Montar todo" a mano.
+        if [ -d "$SRC" ]; then
+            _log_throttled "$DEST.remount" "Bind caído solo (origen sigue presente, mem=$(_mem_avail_kb)KB) — remontando: $SRC -> $DEST" 10
+            mount_one "$SRC" "$DEST"
+        fi
+        return 0
+    fi
     # Sin nsenter a propósito: el origen (SD/OTG) no pasa por el FUSE de storage por app,
     # así que cualquier proceso ve igual si sigue presente o no (mismo criterio que
     # wait_for_path, que tampoco usa run_global para esto).
