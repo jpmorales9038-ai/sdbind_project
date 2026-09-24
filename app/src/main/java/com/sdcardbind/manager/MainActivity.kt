@@ -227,6 +227,10 @@ fun BindApp() {
                 kotlinx.coroutines.delay(400)
                 val latest = RootOps.storageVolumes()
                 applyVolumes(latest)
+                // Al conectar hardware, además de los anillos, refrescamos el estado de los
+                // vínculos ahora mismo (en vez de esperar hasta 1.5s al próximo ciclo del
+                // loop de abajo) para que "ausente" -> "presente" se sienta instantáneo.
+                entries = RootOps.loadMounts()
                 best = latest.filter { it.kind == VolumeKind.EXTERNAL && volId(it.path) !in known }
                     .sortedWith(
                         compareByDescending<StorageVolume> { it.path.contains("media_rw") }
@@ -287,6 +291,11 @@ fun BindApp() {
         while (true) {
             kotlinx.coroutines.delay(1500)
             applyVolumes(RootOps.storageVolumes())
+            // Antes este loop solo refrescaba los anillos de almacenamiento; el estado de
+            // cada vínculo (presente/ausente) se quedaba viejo hasta salir de la app o
+            // mantener presionado. Ahora se recalcula en el mismo ciclo, sin pruneStaleMounts
+            // ni tailLog (eso sigue solo en refresh()) para no hacer de más cada 1.5s.
+            entries = RootOps.loadMounts()
         }
     }
 
@@ -1163,11 +1172,15 @@ private fun BindCard(entry: MountEntry, onDelete: () -> Unit, onOpen: () -> Unit
 @Composable
 private fun StatusChip(status: String) {
     val cs = MaterialTheme.colorScheme
+    // Verde fijo (no ligado al Material You dinámico, que según el wallpaper puede no salir
+    // verde) para que "presente"/"montado" se lean como semáforo en cualquier tema.
+    val trafficGreenBg = Color(0xFF2E7D32)
+    val trafficGreenFg = Color.White
     val (label, bg, fg) = when (status) {
-        "MOUNTED" -> Triple(stringResource(R.string.status_mounted), cs.tertiaryContainer, cs.onTertiaryContainer)
+        "MOUNTED" -> Triple(stringResource(R.string.status_mounted), trafficGreenBg, trafficGreenFg)
         // El origen existe pero no está montado -> mismo verde que "montado": lo importante
         // para el usuario es que la unidad está disponible, no si el bind sigue activo.
-        "UNMOUNTED" -> Triple(stringResource(R.string.status_present), cs.tertiaryContainer, cs.onTertiaryContainer)
+        "UNMOUNTED" -> Triple(stringResource(R.string.status_present), trafficGreenBg, trafficGreenFg)
         "SOURCE_MISSING" -> Triple(stringResource(R.string.status_missing), cs.errorContainer, cs.onErrorContainer)
         else -> Triple(stringResource(R.string.status_unknown), cs.surfaceContainerHighest, cs.onSurfaceVariant)
     }
