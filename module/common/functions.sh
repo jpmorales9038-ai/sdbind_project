@@ -187,6 +187,22 @@ MISS_DIR="$MODDIR/.watch_grace"
 # forma sostenida entre chequeos, antes de darlo por desconectado de verdad.
 GRACE_SECONDS=8
 
+# Umbral de RAM disponible (KB) por debajo del cual el sistema puede estar matando procesos
+# (low-memory killer) para liberar memoria — justo el escenario que GRACE_SECONDS por sí
+# solo no cubre bien si la reconexión del proveedor tarda más de esos 8s. Con Android por
+# debajo de esto, un "$SRC" ausente es mucho menos confiable.
+LOW_MEM_KB=204800
+
+# Poca RAM ahora mismo (según /proc/meminfo). Si no se puede leer, se asume que NO hay poca
+# RAM (falso negativo aquí es más seguro que pausar el conteo sin motivo real).
+_low_mem() {
+    avail=$(awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null)
+    case "$avail" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$avail" -lt "$LOW_MEM_KB" ]
+}
+
 # Marcador por DEST con el instante (epoch) en que se lo vio faltar por primera vez. No se
 # bloquea acá con un sleep/retry: esta función corre también dentro de "status"
 # (webctl.sh), al que la app le pregunta cada ~1.5s para refrescar la pantalla, y una
@@ -208,6 +224,13 @@ _watch_cb() {
     marker=$(_miss_marker "$DEST")
     if [ -d "$SRC" ]; then
         rm -f "$marker" 2>/dev/null
+        return 0
+    fi
+    if _low_mem; then
+        # No sumamos ni arrancamos el conteo de gracia mientras el sistema está justo de
+        # RAM: es el momento en que más probable es que esto sea un falso negativo y no una
+        # desconexión real. El marcador (si ya existía de antes) queda congelado tal cual,
+        # a la espera de que la memoria se recupere.
         return 0
     fi
     now=$(date +%s 2>/dev/null || echo 0)
