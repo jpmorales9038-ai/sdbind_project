@@ -185,7 +185,17 @@ MISS_DIR="$MODDIR/.watch_grace"
 # /mnt/media_rw (FUSE/MediaProvider): durante ese lapso "$SRC" da falso negativo aunque la
 # SD/OTG siga físicamente conectada. GRACE_SECONDS es cuánto tiene que faltar el origen, de
 # forma sostenida entre chequeos, antes de darlo por desconectado de verdad.
-GRACE_SECONDS=8
+#
+# BUG (v2.8.11 y anteriores): con 8s esto alcanzaba a dispararse en falso durante uso
+# intensivo de una carpeta vinculada (un juego leyendo/escribiendo mucho rato seguido):
+# bajo esa carga, el propio puente FUSE/media provider que sirve /mnt/media_rw puede
+# saturarse o reiniciarse solo por un momento, y mientras tanto SU PROPIO punto de montaje
+# puede faltar de /proc/1/mounts (lo que ve _device_present) más de esos 8s — no porque la
+# SD/OTG se haya desconectado, sino porque el proveedor tarda en reaparecer bajo carga.
+# 45s da margen de sobra para que el proveedor se recupere solo sin desmontar al usuario en
+# medio de una partida, mientras sigue detectando una desconexión real (que se sostiene
+# indefinidamente, no unos segundos) en un tiempo razonable.
+GRACE_SECONDS=45
 
 # Umbral de RAM disponible (KB) por debajo del cual el sistema puede estar matando procesos
 # (low-memory killer) para liberar memoria — justo el escenario que GRACE_SECONDS por sí
@@ -284,6 +294,13 @@ _watch_cb() {
     esac
     elapsed=$((now - since))
     if [ "$elapsed" -ge "$GRACE_SECONDS" ]; then
+        # Reconfirmación de último momento: barata (solo lee /proc/1/mounts, no toca el
+        # filesystem) y evita un desmontaje si el proveedor reapareció justo entre el
+        # watch_and_prune anterior y este.
+        if [ -d "$SRC" ] || _device_present "$SRC"; then
+            rm -f "$marker" 2>/dev/null
+            return 0
+        fi
         log "Auto-desmontado (origen desconectado ${elapsed}s): $SRC -> $DEST"
         unmount_one "$DEST"
         rm -f "$marker" 2>/dev/null
