@@ -42,6 +42,21 @@ _dump_media_procs() {
     done
 }
 
+# Dos logs distintos ya mostraron lo mismo: MediaProvider y vold siguen vivos y protegidos
+# (adj=-1000, mismo PID) justo cuando el bind se cae — descartado que sea un proceso al que
+# maten. /proc no puede decir MÁS que eso; lo que falta es lo que el propio Android anota en
+# su log del sistema (vold y StorageManagerService suelen loguear sus propias acciones de
+# remount/reset con motivo incluido). Se pide solo el buffer reciente ("-d", no sigue en
+# vivo) para no bloquear, filtrado a lo relevante para no inundar mount.log.
+_dump_logcat_slice() {
+    logcat -d -t 300 2>/dev/null \
+        | grep -iE 'vold|fuse|sdcardfs|mediaprovider|storagemanager|externalstorage' \
+        | tail -n 40 \
+        | while IFS= read -r ll; do
+            log "DIAG[logcat] $ll"
+        done
+}
+
 _protect_media_fuse() {
     # BUG (primer log): "ps -A -o PID,NAME" nunca matcheó nada en toda la sesión (mp=? se
     # mantuvo así en +100 líneas de heartbeat) — el toybox de varios equipos rechaza specs de
@@ -415,13 +430,22 @@ _watch_cb() {
         if [ -d "$SRC" ]; then
             [ -f "$NOHEAL_MARKER" ] && return 0
             _log_throttled "$DEST.remount" "Bind caído solo (origen sigue presente, mem=$(_mem_avail_kb)KB) — remontando: $SRC -> $DEST" 10
-            # DIAGNÓSTICO: foto del estado real de los procesos media/fuse justo en el
-            # instante de la caída (throttled aparte del mensaje de arriba: si el bind cae en
-            # ráfaga varias veces seguidas, no tiene sentido repetir la misma foto cada vez).
-            if _log_throttled "$DEST.dropdump" "DIAG: foto de procesos media/fuse tomada (ver líneas siguientes)" 20; then
-                _dump_media_procs "drop"
-            fi
+            # DIAGNÓSTICO: throttled aparte del mensaje de arriba (si el bind cae en ráfaga
+            # varias veces seguidas, no tiene sentido repetir la misma foto cada vez).
+            # Solo se decide ACÁ si toca diagnosticar esta vez; el volcado en sí se hace
+            # después de remontar (más abajo) para no sumarle latencia a la recuperación.
+            do_diag=0
+            _log_throttled "$DEST.dropdump" "DIAG: foto de procesos y logcat tomada (ver líneas siguientes)" 20 && do_diag=1
             mount_one "$SRC" "$DEST"
+            if [ "$do_diag" = "1" ]; then
+                # Dos logs seguidos (sesiones distintas) muestran el mismo resultado: el PID
+                # de MediaProvider y de vold no cambian y siguen con adj=-1000 en el instante
+                # de la caída — no es un proceso muriendo. El próximo dato que falta no lo
+                # tiene /proc: es lo que Android mismo loguea (vold/StorageManagerService
+                # suelen anotar sus propias acciones de remount en logcat).
+                _dump_media_procs "drop"
+                _dump_logcat_slice
+            fi
         fi
         return 0
     fi
