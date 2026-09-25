@@ -291,6 +291,11 @@ unmount_one() {
         return 0
     fi
     D=$(strip_slash "$DEST")
+    # Motivo declarado por quien llama (ver call sites: webctl.sh apply/unmount,
+    # remove_entry, _watch_cb). Si nadie lo seteó, queda "desconocido" — eso mismo ya es una
+    # pista (significa que se agregó un nuevo call site sin etiquetar).
+    reason="${UNMOUNT_REASON:-desconocido}"
+    chain_logged=0
     # Con --rbind, un mount anidado dentro del origen queda como una entrada de mount APARTE
     # bajo DEST (no solo una carpeta) — hay que desmontar de más anidado a menos anidado, no
     # solo el de arriba, o quedan mounts colgando.
@@ -298,7 +303,11 @@ unmount_one() {
         awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2- |
     while IFS= read -r mp; do
         [ -n "$mp" ] || continue
-        run_global umount -l "$mp" 2>>"$LOG" && log "Desmontado: $mp"
+        if [ "$chain_logged" = "0" ]; then
+            log "DIAG[unmount-caller motivo=$reason] $(_caller_chain)"
+            chain_logged=1
+        fi
+        run_global umount -l "$mp" 2>>"$LOG" && log "Desmontado (motivo=$reason): $mp"
     done
 }
 
@@ -405,6 +414,31 @@ _low_mem_recently() {
     esac
     now=$(date +%s 2>/dev/null || echo 0)
     [ $((now - since)) -lt "$LOW_MEM_STICKY_SECONDS" ]
+}
+
+# DIAGNÓSTICO: el log del 25/09 mostró un "Desmontado: ..." en medio de una partida SIN que
+# lo precediera ni "Auto-desmontado" (rama de _watch_cb por desconexión real) ni "Bind caído
+# solo" (rama de self-heal) — ninguna de las dos cuentas de gracia había ni empezado a correr
+# ("iniciando cuenta de gracia" no aparece en todo el log). O sea: ESTE build de watch_and_prune
+# no fue quien lo desmontó. Solo queda: una acción manual (app/WebUI tocando "Desmontar todo" o
+# eliminando el vínculo) o algo externo al módulo. Esta función deja constancia de la cadena de
+# procesos padres del que ejecuta el desmontaje (sh -> su -> app, o sh -> ksud -> webui, etc.)
+# para que la próxima vez que esto pase, el log diga solo quién lo hizo en vez de tener que
+# volver a descartar teorías a ciegas.
+_caller_chain() {
+    chain=""
+    pid=$$
+    i=0
+    while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null && [ "$i" -lt 6 ]; do
+        cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
+        [ -n "$cmd" ] || cmd="?"
+        chain="$chain${chain:+ <- }${cmd% }(pid=$pid)"
+        ppid=$(awk '/^PPid:/{print $2}' "/proc/$pid/status" 2>/dev/null)
+        case "$ppid" in ''|*[!0-9]*) break ;; esac
+        pid="$ppid"
+        i=$((i + 1))
+    done
+    echo "$chain"
 }
 
 # Log de una línea, como máximo una vez cada $3 segundos por $1 (clave arbitraria). Para
@@ -562,7 +596,9 @@ _watch_cb() {
             return 0
         fi
         log "Auto-desmontado (origen desconectado ${elapsed}s, mem=$(_mem_avail_kb)KB): $SRC -> $DEST"
+        UNMOUNT_REASON="watch_cb (desconexión real, margen ${elapsed}s cumplido)"
         unmount_one "$DEST"
+        unset UNMOUNT_REASON
         rm -f "$marker" 2>/dev/null
     fi
 }
@@ -602,7 +638,9 @@ watch_and_prune() {
 remove_entry() {
     SRC=$(ensure_slash "$1")
     DEST=$(ensure_slash "$2")
+    UNMOUNT_REASON="remove_entry (vínculo eliminado)"
     unmount_one "$DEST"
+    unset UNMOUNT_REASON
     rm -f "$(_miss_marker "$DEST")" 2>/dev/null
     [ -f "$CONF" ] || return 0
     tmp="$CONF.tmp.$$"

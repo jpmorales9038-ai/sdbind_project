@@ -267,6 +267,30 @@ fun BindApp() {
         }
     }
 
+    // FIX: antes, ACTION_MEDIA_UNMOUNTED/REMOVED/BAD_REMOVAL llamaban unmountAllNow()
+    // directo, sin confirmar nada — un log real mostró un desmontaje a mitad de una partida
+    // (GTAV) sin que el margen de gracia ni el self-heal del lado shell (_watch_cb) hubieran
+    // llegado siquiera a mirarlo: la app ya había desmontado todo por su cuenta antes. Android
+    // puede emitir estos broadcasts (sobre todo BAD_REMOVAL) igual aunque la SD/OTG siga
+    // físicamente puesta, bajo la misma combinación de I/O intensa + RAM baja que ya
+    // confundía al watch loop antes de agregarle _device_present. Acá se hace la misma
+    // verificación (rápida, contra /proc/1/mounts, sin tocar el filesystem) antes de
+    // desmontar todo en el acto.
+    fun onPossibleMediaGone() {
+        scope.launch {
+            if (RootOps.anyVolumePresent()) {
+                // Probable falso positivo: el volumen sigue en la tabla de montaje del
+                // kernel. No desmontamos nada de golpe — se deja que el loop normal
+                // (_watch_cb, con su propio margen de gracia) siga vigilando, igual que con
+                // cualquier otro hipo transitorio.
+                RootOps.pruneStaleMounts()
+                refresh()
+            } else {
+                unmountAllNow(auto = true)
+            }
+        }
+    }
+
     fun clearLogNow() {
         scope.launch {
             RootOps.clearLog()
@@ -309,7 +333,7 @@ fun BindApp() {
                     UsbManager.ACTION_USB_DEVICE_DETACHED,
                     Intent.ACTION_MEDIA_UNMOUNTED,
                     Intent.ACTION_MEDIA_REMOVED,
-                    Intent.ACTION_MEDIA_BAD_REMOVAL -> unmountAllNow(auto = true)
+                    Intent.ACTION_MEDIA_BAD_REMOVAL -> onPossibleMediaGone()
                 }
             }
         }

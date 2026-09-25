@@ -196,6 +196,19 @@ object RootOps {
         Shell.cmd("sh $WEBCTL prune").exec().isSuccess
     }
 
+    /**
+     * Confirma contra /proc/1/mounts (no toca el filesystem, así que responde igual aunque
+     * el origen esté con I/O saturada) si algún volumen SD/OTG configurado sigue realmente
+     * presente. Se usa antes de reaccionar a ACTION_MEDIA_UNMOUNTED/REMOVED/BAD_REMOVAL: esos
+     * broadcasts de Android pueden dispararse en falso bajo uso intensivo + RAM baja (el
+     * mismo tipo de hipo que _device_present ya filtra del lado shell), y desmontar TODO en
+     * el acto sin confirmar es lo que sacaba al usuario de una partida en curso.
+     */
+    suspend fun anyVolumePresent(): Boolean {
+        val lines = exec("sh $WEBCTL anyvolpresent")
+        return lines.any { it.trim() == "PRESENT" }
+    }
+
     suspend fun removeMount(source: String, dest: String): Boolean = withContext(Dispatchers.IO) {
         val src = normalizeDir(source)
         val dst = normalizeDir(dest)

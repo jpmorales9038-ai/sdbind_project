@@ -13,7 +13,9 @@ case "$1" in
         # El usuario está pidiendo montar a propósito: si "Desmontar todo" había dejado la
         # autocuración pausada, la reactivamos.
         rm -f "$NOHEAL_MARKER" 2>/dev/null
+        UNMOUNT_REASON="webctl apply (reintento/Guardar y montar, app o WebUI)"
         unmount_all
+        unset UNMOUNT_REASON
         apply_mounts
         echo "DONE"
         ;;
@@ -21,8 +23,21 @@ case "$1" in
     unmount)
         # "Desmontar todo" es intencional: mientras este archivo exista, _watch_cb (ver
         # functions.sh) no va a reintentar remontar nada solo, aunque el origen siga ahí.
+        #
+        # DIAGNÓSTICO: el log del 25/09 mostró un "Desmontado" en medio de una partida sin
+        # que _watch_cb hubiera arrancado ninguna cuenta de gracia ni self-heal — o sea, no
+        # fue este módulo desmontando por su cuenta. Este es justamente el botón que, tocado
+        # sin querer (o con querer, sin darse cuenta de que iba a sacar del juego), produce
+        # exactamente ese patrón: desmonta YA, sin pasar por _watch_cb, y además dejaba
+        # marcado NOHEAL_MARKER, así que el self-heal no reintentaba después — coincide con
+        # que ese log no muestre ningún "Bind caído solo" tras el desmontaje, pese a que el
+        # origen seguía presente un rato más (src=1 en el HB siguiente). unmount_one ahora
+        # deja registrada la cadena de procesos que pidió esto (ver _caller_chain en
+        # functions.sh), así que la próxima vez el log dice solo quién lo tocó.
         touch "$NOHEAL_MARKER" 2>/dev/null
+        UNMOUNT_REASON="webctl unmount (botón Desmontar todo, app o WebUI)"
         unmount_all
+        unset UNMOUNT_REASON
         echo "DONE"
         ;;
 
@@ -96,6 +111,30 @@ case "$1" in
     prune)
         watch_and_prune
         echo "DONE"
+        ;;
+
+    anyvolpresent)
+        # Lo usa la app antes de reaccionar a ACTION_MEDIA_UNMOUNTED/REMOVED/BAD_REMOVAL: esos
+        # broadcasts de Android pueden dispararse igual aunque la SD/OTG siga físicamente
+        # puesta (mismo tipo de falso positivo por I/O saturada + RAM baja que ya conocemos
+        # del lado shell — ver _device_present). Antes de desmontar TODO en el acto sin pasar
+        # por el margen de gracia ni el self-heal de _watch_cb, se confirma acá contra
+        # /proc/1/mounts (no toca el filesystem, responde igual aunque el origen esté
+        # saturado de I/O) si al menos un volumen configurado sigue en la tabla de montaje.
+        any=0
+        if [ -f "$CONF" ]; then
+            while IFS='|' read -r SRC DEST ENABLED || [ -n "$SRC" ]; do
+                [ -z "$SRC" ] && continue
+                case "$SRC" in \#*) continue ;; esac
+                [ "$ENABLED" = "1" ] || continue
+                _device_present "$SRC" && any=1
+            done < "$CONF"
+        fi
+        if [ "$any" = "1" ]; then
+            echo "PRESENT"
+        else
+            echo "GONE"
+        fi
         ;;
 
     clearlog)
