@@ -49,11 +49,27 @@ _dump_media_procs() {
 # remount/reset con motivo incluido). Se pide solo el buffer reciente ("-d", no sigue en
 # vivo) para no bloquear, filtrado a lo relevante para no inundar mount.log.
 _dump_logcat_slice() {
-    logcat -d -t 300 2>/dev/null \
-        | grep -iE 'vold|fuse|sdcardfs|mediaprovider|storagemanager|externalstorage' \
-        | tail -n 40 \
+    logcat -d -t 500 2>/dev/null \
+        | grep -iE 'vold|fuse|sdcardfs|passthrough|native_boot|mediaprovider|storagemanager|externalstorage' \
+        | tail -n 60 \
         | while IFS= read -r ll; do
-            log "DIAG[logcat] $ll"
+            # El log anterior mostró un PID leyendo justo "fuse_enabled" y
+            # "fuse.passthrough.enable" (el patrón típico de un puente FUSE
+            # (re)inicializándose) que NO era ninguno de los que veníamos protegiendo ni
+            # apareció en nuestra propia foto de /proc — probablemente porque ya no existía
+            # para cuando escaneamos después. Se resuelve el nombre ACÁ, al leer logcat, que
+            # es lo más cerca posible en el tiempo del momento real.
+            lpid=$(echo "$ll" | awk '{print $3}')
+            name=""
+            case "$lpid" in
+                ''|*[!0-9]*) ;;
+                *) name=$(tr '\0' ' ' < "/proc/$lpid/cmdline" 2>/dev/null) ;;
+            esac
+            if [ -n "$name" ]; then
+                log "DIAG[logcat pid=$lpid name=$name] $ll"
+            else
+                log "DIAG[logcat] $ll"
+            fi
         done
 }
 
