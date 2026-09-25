@@ -10,6 +10,27 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG"
 }
 
+# En Android moderno, /storage/emulated/0 lo sirve el proceso de MediaProvider vía FUSE
+# (ya no el viejo binario "sdcard" aparte). Los logs muestran el bind cayéndose SOLO
+# (origen y volumen de la SD/OTG intactos) justo cuando la RAM libre del sistema se
+# desploma a niveles críticos (~130-300MB) — el patrón típico de que el kernel mató/reinició
+# ese proceso como último recurso, lo que se lleva puesto cualquier --rbind montado encima
+# de su punto de montaje. Bajarle el oom_score_adj lo pone casi al nivel de system_server:
+# el OOM killer preferirá matar otra cosa antes que a él. No es magia — si de verdad no
+# queda NADA más que matar, esto no lo va a salvar — pero en la práctica hay screens en
+# background y demás candidatos antes de llegar a un proceso del sistema protegido así.
+# Se reaplica periódicamente porque si igual llegara a reiniciarse, el PID cambia.
+_protect_media_fuse() {
+    found=0
+    ps -A -o PID,NAME 2>/dev/null | grep 'media\.module' | while read -r pid name; do
+        case "$pid" in ''|*[!0-9]*) continue ;; esac
+        echo 1 > "$MISS_DIR/.mediaprovider_found" 2>/dev/null
+        current=$(cat "/proc/$pid/oom_score_adj" 2>/dev/null)
+        [ "$current" = "-1000" ] && continue
+        echo -1000 > "/proc/$pid/oom_score_adj" 2>/dev/null
+    done
+}
+
 ensure_slash() {
     p="$1"
     case "$p" in
@@ -404,7 +425,9 @@ _watch_cb() {
 # Sacar (o dejar de llamar desde service.sh) una vez encontrada la causa real.
 heartbeat_log() {
     avail=$(_mem_avail_kb)
-    line="HB mem=${avail:-?}KB"
+    mp="mp=?"
+    [ -f "$MISS_DIR/.mediaprovider_found" ] && mp="mp=protegido"
+    line="HB mem=${avail:-?}KB $mp"
     if [ -f "$CONF" ]; then
         while IFS='|' read -r SRC DEST ENABLED || [ -n "$SRC" ]; do
             [ -z "$SRC" ] && continue
