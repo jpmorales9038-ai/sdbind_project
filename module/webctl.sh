@@ -46,13 +46,33 @@ case "$1" in
         # el log) no tiene otra explicación sensata que esa carrera. Ajustar el número del
         # margen nunca lo iba a arreglar porque el problema no era el número, era que dos
         # procesos pisaban el mismo archivo a la vez. Ahora hay un solo dueño de esa lógica:
-        # el loop de service.sh. "status" solo reporta lo que hay, sin tocar el marcador.
+        # el loop de service.sh. "status" solo reporta lo que hay, sin tocar el marcador
+        # POR DEST (_miss_marker/GRACE_SECONDS) ni llamar a watch_and_prune.
+        #
+        # OJO 2: lo de arriba no significa que "status" tenga que mentir mientras dura el
+        # margen de gracia del auto-desmontado. Si sacás la SD/OTG sin desmontar, el bind
+        # sigue figurando "montado" para el kernel (un bind no se cae solo porque el origen
+        # desaparezca) hasta que watch_and_prune lo desmonte de verdad, ~2 min después. Antes
+        # este bloque mostraba "montado" todo ese rato. Ahora, si el bind sigue montado pero
+        # ya podemos confirmar con los MISMOS chequeos que usa _watch_cb para decidir si vale
+        # la pena arrancar la cuenta de gracia (RAM baja reciente, volumen SD/OTG todavía
+        # presente por I/O saturada) que el origen se fue de verdad, lo mostramos como
+        # "origen ausente" al toque — sin tocar el marcador por DEST ni el mount en sí, así
+        # que el auto-desmontado real sigue esperando su propio margen sin cambios.
         [ -f "$CONF" ] || exit 0
         while IFS='|' read -r SRC DEST ENABLED || [ -n "$SRC" ]; do
             [ -z "$SRC" ] && continue
             case "$SRC" in \#*) continue ;; esac
             if is_mounted "$DEST"; then
-                ST="MOUNTED"
+                if [ -d "$SRC" ]; then
+                    ST="MOUNTED"
+                elif _low_mem || _low_mem_recently; then
+                    ST="MOUNTED"
+                elif _device_present "$SRC"; then
+                    ST="MOUNTED"
+                else
+                    ST="SOURCE_MISSING"
+                fi
             elif [ -d "$SRC" ]; then
                 ST="UNMOUNTED"
             else
