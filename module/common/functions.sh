@@ -21,13 +21,28 @@ log() {
 # background y demás candidatos antes de llegar a un proceso del sistema protegido así.
 # Se reaplica periódicamente porque si igual llegara a reiniciarse, el PID cambia.
 _protect_media_fuse() {
-    found=0
-    ps -A -o PID,NAME 2>/dev/null | grep 'media\.module' | while read -r pid name; do
+    # BUG encontrado en este log: "ps -A -o PID,NAME" nunca matcheó nada en toda la sesión
+    # (mp=? se mantuvo así en las +100 líneas de heartbeat) — el toybox de varios equipos
+    # rechaza specs de columna en mayúsculas para "-o" y devuelve la lista vacía sin avisar
+    # (el "2>/dev/null" se come el error), así que el "while read" de abajo nunca llegaba a
+    # ejecutarse ni una vez: la protección OOM jamás se aplicó. Se usa el listado por
+    # defecto de "ps -A" (soportado siempre) y se saca la columna a mano, que es más portable
+    # entre builds de toybox. También se amplía el patrón por si el equipo todavía usa el
+    # nombre de proceso pre-Mainline (sin ".module").
+    mkdir -p "$MISS_DIR" 2>/dev/null
+    ps -A 2>/dev/null | grep -E 'media\.module|providers\.media|android\.process\.media' | while read -r line; do
+        pid=$(echo "$line" | awk '{print $2}')
         case "$pid" in ''|*[!0-9]*) continue ;; esac
         echo 1 > "$MISS_DIR/.mediaprovider_found" 2>/dev/null
         current=$(cat "/proc/$pid/oom_score_adj" 2>/dev/null)
         [ "$current" = "-1000" ] && continue
         echo -1000 > "/proc/$pid/oom_score_adj" 2>/dev/null
+        after=$(cat "/proc/$pid/oom_score_adj" 2>/dev/null)
+        if [ "$after" != "-1000" ]; then
+            # Si esto aparece en el log, el problema ya no es "no lo encontramos" sino que
+            # algo (SELinux u otra restricción del equipo) bloquea la escritura pese a ser root.
+            _log_throttled "oomprotect.fail" "No se pudo proteger PID $pid (quedó oom_score_adj=$after)" 30
+        fi
     done
 }
 
