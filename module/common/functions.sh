@@ -324,13 +324,16 @@ _miss_marker() {
     echo "$MISS_DIR/$(echo "$1" | tr '/ ' '__')"
 }
 
-# Marcador por DEST que dice "esto se desconectó de verdad al menos una vez" (lo planta
-# _watch_cb más abajo, justo cuando confirma una desconexión real tras GRACE_SECONDS). Mientras
-# exista, el self-heal de acá abajo NO remonta solo aunque el origen vuelva a aparecer: eso es
-# justo "insertar la unidad", y de eso se encarga el botón "Montar todo" (webctl.sh apply lo
-# limpia), no el vigilante en segundo plano. Sin este marcador, _watch_cb no puede distinguir
-# "el proveedor FUSE se reinició y el origen nunca se fue" (self-heal, sí queremos remontar
-# solo) de "sacaron la SD/OTG y la volvieron a poner" (no queremos remontar solo).
+# Marcador por DEST que dice "el volumen que sirve a $SRC no está" (lo planta _watch_cb en
+# cuanto lo nota, ver el chequeo de _device_present al principio de esa función). Solo se
+# limpia con una acción explícita del usuario (botón "Montar todo"/"apply") o al arrancar el
+# teléfono — nunca solo porque el volumen volvió a aparecer. Mientras exista, el self-heal de
+# acá abajo NO remonta solo aunque la subcarpeta $SRC vuelva a verse: eso es justo "insertar
+# la unidad", y de eso se encarga el botón, no el vigilante en segundo plano. Sin este
+# marcador, _watch_cb no puede distinguir "el proveedor FUSE de /storage/emulated/0 se
+# reinició y la SD/OTG en sí nunca se fue" (self-heal, sí queremos remontar solo) de "sacaron
+# la SD/OTG (o recién arrancó el teléfono y todavía no la pusieron) y ahora la
+# insertan/reinsertan" (no queremos remontar solo, tiene que decidirlo el usuario).
 _disc_marker() {
     mkdir -p "$MISS_DIR" 2>/dev/null
     echo "$MISS_DIR/.disc_$(echo "$1" | tr '/ ' '__')"
@@ -339,6 +342,23 @@ _disc_marker() {
 _watch_cb() {
     SRC="$1"; DEST="$2"; ENABLED="$3"
     [ "$ENABLED" = "1" ] || return 0
+
+    dmark=$(_disc_marker "$DEST")
+    # Chequeo directo e inmediato, corre en TODOS los ciclos (no solo cuando algo ya se veía
+    # raro): si el punto de montaje del volumen entero (no la subcarpeta $SRC puntual, que
+    # puede fallar transitoriamente por I/O saturada) no está en la tabla de montaje del
+    # kernel, es porque la SD/OTG no está puesta ahora mismo — recién arrancó el teléfono y
+    # todavía no la insertaron, o la sacaron. Cualquiera de los dos casos debe dejar la
+    # entrada esperando el botón cuando el volumen vuelva a aparecer, así que se marca ya
+    # mismo, sin esperar a que se cumpla ningún margen de gracia ni a que la subcarpeta
+    # puntual desaparezca. El proceso de FUSE que sirve /storage/emulated/0 (la causa del
+    # self-heal de más abajo) es un mount totalmente aparte: nunca hace desaparecer el punto
+    # de montaje del volumen, así que el self-heal real (bind caído con la SD/OTG puesta todo
+    # el tiempo) nunca dispara esto.
+    if ! _device_present "$SRC"; then
+        touch "$dmark" 2>/dev/null
+    fi
+
     if ! is_mounted "$DEST"; then
         # El bind puede haberse caído solo sin que la SD/OTG se haya ido (el proveedor FUSE
         # que sirve /storage/emulated/0 se reinicia por presión de memoria y se lleva puesto
@@ -347,12 +367,12 @@ _watch_cb() {
         # archivos y tenga que tocar "Montar todo" a mano.
         if [ -d "$SRC" ]; then
             [ -f "$NOHEAL_MARKER" ] && return 0
-            if [ -f "$(_disc_marker "$DEST")" ]; then
-                # Esto ya se desconectó de verdad una vez y ahora el origen volvió a aparecer
-                # (SD/OTG reinsertada). Insertar la unidad NO debe automontar los binds: para
-                # eso está el botón "Montar todo". Se deja sin montar hasta que el usuario lo
-                # pida (webctl.sh apply limpia este marcador).
-                _log_throttled "$DEST.reinserted" "Origen reconectado tras una desconexión real: no se automonta, esperando 'Montar todo' ($SRC -> $DEST)" 30
+            if [ -f "$dmark" ]; then
+                # El volumen no estaba puesto (recién se insertó/reinsertó ahora). Insertar la
+                # unidad NO debe automontar los binds: para eso está el botón "Montar todo".
+                # Se deja sin montar hasta que el usuario lo pida (webctl.sh apply limpia este
+                # marcador).
+                _log_throttled "$DEST.reinserted" "Volumen recién insertado/reinsertado: no se automonta, esperando 'Montar todo' ($SRC -> $DEST)" 30
                 return 0
             fi
             _log_throttled "$DEST.remount" "Bind caído solo (origen sigue presente, mem=$(_mem_avail_kb)KB) — remontando: $SRC -> $DEST" 10
@@ -418,10 +438,9 @@ _watch_cb() {
         unmount_one "$DEST"
         unset UNMOUNT_REASON
         rm -f "$marker" 2>/dev/null
-        # Desconexión real confirmada (no un hipo de RAM/I-O): a partir de acá, si el origen
-        # reaparece (reinsertaron la SD/OTG), que quede sin montar hasta que el usuario toque
-        # "Montar todo" — ver el chequeo de _disc_marker más arriba en esta misma función.
-        touch "$(_disc_marker "$DEST")" 2>/dev/null
+        # No hace falta marcar acá "desconexión real" a mano: en este punto _device_present ya
+        # dio falso (ver el chequeo al principio de la función, más arriba), así que $dmark ya
+        # quedó marcado en este mismo ciclo.
     fi
 }
 
