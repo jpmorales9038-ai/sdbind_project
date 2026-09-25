@@ -20,6 +20,28 @@ log() {
 # queda NADA más que matar, esto no lo va a salvar — pero en la práctica hay screens en
 # background y demás candidatos antes de llegar a un proceso del sistema protegido así.
 # Se reaplica periódicamente porque si igual llegara a reiniciarse, el PID cambia.
+# Vuelca al log (pid, oom_score_adj ACTUAL y cmdline) cualquier proceso vivo relacionado con
+# media/fuse/storage. Se usa tanto una vez al arrancar como, más importante, justo en el
+# instante de una caída del bind (ver _watch_cb): compara ahí si el proceso que protegimos
+# seguía vivo con adj=-1000 (entonces lo tiró otra cosa, no un OOM-kill de ESE proceso) o si
+# cambió de PID (lo mataron y volvió a levantar pese a la protección) — la foto de arranque
+# sola no alcanza para distinguir un caso del otro.
+_dump_media_procs() {
+    reason="$1"
+    for pdir in /proc/[0-9]*; do
+        pid="${pdir#/proc/}"
+        cmdline=$(tr '\0' ' ' < "$pdir/cmdline" 2>/dev/null)
+        [ -n "$cmdline" ] || continue
+        case "$cmdline" in
+            *sdcard_bind_ui*) continue ;;
+            *media*|*fuse*|*sdcard*|*vold*|*storage*|*provider*|*Media*|*Fuse*|*Sdcard*|*Vold*|*Storage*|*Provider*) ;;
+            *) continue ;;
+        esac
+        adj=$(cat "$pdir/oom_score_adj" 2>/dev/null)
+        log "DIAG[$reason] pid=$pid adj=${adj:-?}: $cmdline"
+    done
+}
+
 _protect_media_fuse() {
     # BUG (primer log): "ps -A -o PID,NAME" nunca matcheó nada en toda la sesión (mp=? se
     # mantuvo así en +100 líneas de heartbeat) — el toybox de varios equipos rechaza specs de
@@ -32,23 +54,35 @@ _protect_media_fuse() {
     # /proc/<pid>/cmdline (la fuente original de la que "ps" saca ese dato en primer lugar,
     # separada por NUL en vez de espacios) — más portable porque no depende de qué columnas o
     # mayúsculas acepte el "ps" de este equipo en particular.
+    #
+    # RESULTADO (tercer log, v2.8.21): funcionó — mp=protegido aparece desde el primer
+    # heartbeat del loop principal. El volcado de arranque en sí salió casi vacío (corrió
+    # durante post-fs-data, con el reloj todavía sin sincronizar, antes de que MediaProvider
+    # llegara a arrancar) así que no sirvió de mucho — se deja de disparar solo una vez y en
+    # su lugar se repite cada 30s mientras no se haya encontrado nada, para no perderse el
+    # arranque tardío del proceso.
     mkdir -p "$MISS_DIR" 2>/dev/null
-    dump_marker="$MISS_DIR/.proc_dumped"
+    found_marker="$MISS_DIR/.mediaprovider_found"
     dump_this_round=0
-    [ -f "$dump_marker" ] || dump_this_round=1
+    if [ ! -f "$found_marker" ]; then
+        dump_stamp="$MISS_DIR/.procdump_last"
+        now=$(date +%s 2>/dev/null || echo 0)
+        last=0
+        [ -f "$dump_stamp" ] && last=$(cat "$dump_stamp" 2>/dev/null)
+        case "$last" in ''|*[!0-9]*) last=0 ;; esac
+        if [ $((now - last)) -ge 30 ]; then
+            echo "$now" > "$dump_stamp" 2>/dev/null
+            dump_this_round=1
+        fi
+    fi
+    [ "$dump_this_round" = "1" ] && _dump_media_procs "boot"
     for pdir in /proc/[0-9]*; do
         pid="${pdir#/proc/}"
         cmdline=$(tr '\0' ' ' < "$pdir/cmdline" 2>/dev/null)
         [ -n "$cmdline" ] || continue
-        if [ "$dump_this_round" = "1" ]; then
-            case "$cmdline" in
-                *media*|*fuse*|*sdcard*|*vold*|*Media*|*Fuse*|*Sdcard*|*Vold*)
-                    log "DIAG proc $pid: $cmdline" ;;
-            esac
-        fi
         case "$cmdline" in
             *media.module*|*providers.media*|*android.process.media*)
-                echo 1 > "$MISS_DIR/.mediaprovider_found" 2>/dev/null
+                echo 1 > "$found_marker" 2>/dev/null
                 current=$(cat "$pdir/oom_score_adj" 2>/dev/null)
                 [ "$current" = "-1000" ] && continue
                 echo -1000 > "$pdir/oom_score_adj" 2>/dev/null
@@ -62,10 +96,7 @@ _protect_media_fuse() {
                 ;;
         esac
     done
-    if [ "$dump_this_round" = "1" ]; then
-        touch "$dump_marker" 2>/dev/null
-        log "DIAG /proc: fin del volcado único de procesos media/fuse/sdcard/vold"
-    fi
+
 }
 
 ensure_slash() {
@@ -384,6 +415,12 @@ _watch_cb() {
         if [ -d "$SRC" ]; then
             [ -f "$NOHEAL_MARKER" ] && return 0
             _log_throttled "$DEST.remount" "Bind caído solo (origen sigue presente, mem=$(_mem_avail_kb)KB) — remontando: $SRC -> $DEST" 10
+            # DIAGNÓSTICO: foto del estado real de los procesos media/fuse justo en el
+            # instante de la caída (throttled aparte del mensaje de arriba: si el bind cae en
+            # ráfaga varias veces seguidas, no tiene sentido repetir la misma foto cada vez).
+            if _log_throttled "$DEST.dropdump" "DIAG: foto de procesos media/fuse tomada (ver líneas siguientes)" 20; then
+                _dump_media_procs "drop"
+            fi
             mount_one "$SRC" "$DEST"
         fi
         return 0
