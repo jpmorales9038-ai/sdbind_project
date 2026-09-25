@@ -21,29 +21,51 @@ log() {
 # background y demás candidatos antes de llegar a un proceso del sistema protegido así.
 # Se reaplica periódicamente porque si igual llegara a reiniciarse, el PID cambia.
 _protect_media_fuse() {
-    # BUG encontrado en este log: "ps -A -o PID,NAME" nunca matcheó nada en toda la sesión
-    # (mp=? se mantuvo así en las +100 líneas de heartbeat) — el toybox de varios equipos
-    # rechaza specs de columna en mayúsculas para "-o" y devuelve la lista vacía sin avisar
-    # (el "2>/dev/null" se come el error), así que el "while read" de abajo nunca llegaba a
-    # ejecutarse ni una vez: la protección OOM jamás se aplicó. Se usa el listado por
-    # defecto de "ps -A" (soportado siempre) y se saca la columna a mano, que es más portable
-    # entre builds de toybox. También se amplía el patrón por si el equipo todavía usa el
-    # nombre de proceso pre-Mainline (sin ".module").
+    # BUG (primer log): "ps -A -o PID,NAME" nunca matcheó nada en toda la sesión (mp=? se
+    # mantuvo así en +100 líneas de heartbeat) — el toybox de varios equipos rechaza specs de
+    # columna en mayúsculas para "-o" y devuelve la lista vacía sin avisar.
+    #
+    # BUG (segundo log, v2.8.20): cambiado a "ps -A" plano + recorte de columna a mano,
+    # mp=? SIGUE sin cambiar — este equipo tampoco da ninguna línea de "ps -A" que matchee.
+    # Ya van dos intentos con "ps" en variantes distintas sin resultado; en vez de adivinar
+    # un tercer patrón a ciegas, se deja de depender de "ps" del todo y se lee directo de
+    # /proc/<pid>/cmdline (la fuente original de la que "ps" saca ese dato en primer lugar,
+    # separada por NUL en vez de espacios) — más portable porque no depende de qué columnas o
+    # mayúsculas acepte el "ps" de este equipo en particular.
     mkdir -p "$MISS_DIR" 2>/dev/null
-    ps -A 2>/dev/null | grep -E 'media\.module|providers\.media|android\.process\.media' | while read -r line; do
-        pid=$(echo "$line" | awk '{print $2}')
-        case "$pid" in ''|*[!0-9]*) continue ;; esac
-        echo 1 > "$MISS_DIR/.mediaprovider_found" 2>/dev/null
-        current=$(cat "/proc/$pid/oom_score_adj" 2>/dev/null)
-        [ "$current" = "-1000" ] && continue
-        echo -1000 > "/proc/$pid/oom_score_adj" 2>/dev/null
-        after=$(cat "/proc/$pid/oom_score_adj" 2>/dev/null)
-        if [ "$after" != "-1000" ]; then
-            # Si esto aparece en el log, el problema ya no es "no lo encontramos" sino que
-            # algo (SELinux u otra restricción del equipo) bloquea la escritura pese a ser root.
-            _log_throttled "oomprotect.fail" "No se pudo proteger PID $pid (quedó oom_score_adj=$after)" 30
+    dump_marker="$MISS_DIR/.proc_dumped"
+    dump_this_round=0
+    [ -f "$dump_marker" ] || dump_this_round=1
+    for pdir in /proc/[0-9]*; do
+        pid="${pdir#/proc/}"
+        cmdline=$(tr '\0' ' ' < "$pdir/cmdline" 2>/dev/null)
+        [ -n "$cmdline" ] || continue
+        if [ "$dump_this_round" = "1" ]; then
+            case "$cmdline" in
+                *media*|*fuse*|*sdcard*|*vold*|*Media*|*Fuse*|*Sdcard*|*Vold*)
+                    log "DIAG proc $pid: $cmdline" ;;
+            esac
         fi
+        case "$cmdline" in
+            *media.module*|*providers.media*|*android.process.media*)
+                echo 1 > "$MISS_DIR/.mediaprovider_found" 2>/dev/null
+                current=$(cat "$pdir/oom_score_adj" 2>/dev/null)
+                [ "$current" = "-1000" ] && continue
+                echo -1000 > "$pdir/oom_score_adj" 2>/dev/null
+                after=$(cat "$pdir/oom_score_adj" 2>/dev/null)
+                if [ "$after" != "-1000" ]; then
+                    # Si esto aparece en el log, el problema ya no es "no lo encontramos" sino
+                    # que algo (SELinux u otra restricción del equipo) bloquea la escritura
+                    # pese a ser root.
+                    _log_throttled "oomprotect.fail" "No se pudo proteger PID $pid (quedó oom_score_adj=$after)" 30
+                fi
+                ;;
+        esac
     done
+    if [ "$dump_this_round" = "1" ]; then
+        touch "$dump_marker" 2>/dev/null
+        log "DIAG /proc: fin del volcado único de procesos media/fuse/sdcard/vold"
+    fi
 }
 
 ensure_slash() {
