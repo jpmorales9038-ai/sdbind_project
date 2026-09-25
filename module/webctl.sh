@@ -10,12 +10,18 @@ case "$1" in
         # unidad que ya no está conectada. Ver el comentario en wait_for_path.
         SDBIND_FAST=1
         export SDBIND_FAST
+        # El usuario está pidiendo montar a propósito: si "Desmontar todo" había dejado la
+        # autocuración pausada, la reactivamos.
+        rm -f "$NOHEAL_MARKER" 2>/dev/null
         unmount_all
         apply_mounts
         echo "DONE"
         ;;
 
     unmount)
+        # "Desmontar todo" es intencional: mientras este archivo exista, _watch_cb (ver
+        # functions.sh) no va a reintentar remontar nada solo, aunque el origen siga ahí.
+        touch "$NOHEAL_MARKER" 2>/dev/null
         unmount_all
         echo "DONE"
         ;;

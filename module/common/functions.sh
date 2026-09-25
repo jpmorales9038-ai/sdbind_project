@@ -181,6 +181,10 @@ unmount_all() {
 }
 
 MISS_DIR="$MODDIR/.watch_grace"
+# El usuario pidió desmontar todo a propósito (botón "Desmontar todo" / WebUI): mientras
+# este archivo exista, _watch_cb NO reintenta remontar nada, aunque el origen siga presente.
+# Lo pone webctl.sh en el caso "unmount" y lo saca en "apply" (ver ese archivo).
+NOHEAL_MARKER="$MODDIR/.no_autoheal"
 # Con poca RAM, Android puede matar y reiniciar por un instante el proceso que sirve
 # /mnt/media_rw (FUSE/MediaProvider): durante ese lapso "$SRC" da falso negativo aunque la
 # SD/OTG siga físicamente conectada. GRACE_SECONDS es cuánto tiene que faltar el origen, de
@@ -320,6 +324,7 @@ _watch_cb() {
         # Si el origen sigue ahí, lo remontamos solos en vez de dejarlo caído hasta que el
         # usuario note que faltan archivos y tenga que tocar "Montar todo" a mano.
         if [ -d "$SRC" ]; then
+            [ -f "$NOHEAL_MARKER" ] && return 0
             _log_throttled "$DEST.remount" "Bind caído solo (origen sigue presente, mem=$(_mem_avail_kb)KB) — remontando: $SRC -> $DEST" 10
             mount_one "$SRC" "$DEST"
         fi
