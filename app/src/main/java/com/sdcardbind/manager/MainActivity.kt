@@ -721,6 +721,11 @@ private val pillSpring = spring<Float>(
 private fun NavScrim(hazeState: HazeState) {
     val cs = MaterialTheme.colorScheme
     val darkTheme = isSystemInDarkTheme()
+    // En paisaje la pantalla es mucho más baja: una altura pensada para retrato resulta
+    // desproporcionada ahí y termina tapando botones y el registro que quedan debajo.
+    // Se recorta a algo mucho más bajo, igual que .nav-scrim en el WebUI para landscape.
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val scrimHeight = if (landscape) 64.dp else 168.dp
     // Blanco en modo claro, negro en modo oscuro — el mismo criterio que --scrim-tint en CSS.
     val scrimTint = if (darkTheme) Color.Black else Color.White
     // En modo oscuro el degradado va a negro puro (no a cs.background, que en Monet suele
@@ -735,7 +740,7 @@ private fun NavScrim(hazeState: HazeState) {
             // barra de navegación (queda como padding vacío) y aparece un corte seco justo
             // encima de ella. Sumamos su alto a la altura fija del box en vez de usarlo
             // como padding, así el degradado sigue llegando hasta el borde físico inferior.
-            .height(168.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+            .height(scrimHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
             .background(
                 Brush.verticalGradient(
                     colors = listOf(Color.Transparent, scrimBase.copy(alpha = 0.94f))
@@ -1444,7 +1449,14 @@ private fun LogPane(log: String) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    Column(Modifier.fillMaxSize().padding(20.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            // Abajo se deja más aire que en los otros lados: el NavScrim flotante pasa por
+            // detrás de este panel y, sin este margen extra, el borde inferior de la tarjeta
+            // del registro quedaba justo debajo de donde el difuminado ya se ve sólido.
+            .padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 84.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 stringResource(R.string.log),

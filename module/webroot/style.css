@@ -259,7 +259,7 @@ h2 { font-size: 18px; margin: 0 0 12px; }
 .log {
   background: #120c10; color: var(--ok);
   font-size: 11px; padding: 16px; border-radius: var(--radius);
-  max-height: 60vh; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  max-height: 54vh; overflow: auto; white-space: pre-wrap; word-break: break-all;
 }
 
 .picker {
@@ -388,4 +388,11 @@ h2 { font-size: 18px; margin: 0 0 12px; }
   .layout > section + section { margin-top: 0; }
   .pane-log, .pane-about, .pane-actions { grid-column: 1 / -1; }
   .fab { right: 20px; bottom: calc(var(--bottom-h) + 8px); }
+  /* En paisaje la pantalla es mucho más baja, así que el scrim con la altura de
+     retrato (pensada para tapar poco a poco el contenido que pasa por detrás en una
+     pantalla alta) resulta desproporcionado: tapa botones y el registro. Se recorta
+     a algo mucho más bajo, pegado solo a la franja real del pill. */
+  .nav-scrim {
+    height: calc(56px + var(--window-inset-bottom, 24px));
+  }
 }
