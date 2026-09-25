@@ -26,12 +26,17 @@ case "$1" in
         ;;
 
     status)
-        # Auto-heal antes de reportar: si el origen de algún bind ya no está (se retiró la
-        # SD/OTG), lo desmonta acá mismo antes de listar — así "status" siempre refleja la
-        # realidad al toque, sin depender de que el loop de service.sh (cada 2s) ya haya
-        # pasado. Lo aprovechan tanto la WebUI como la app nativa, que llaman a este mismo
-        # comando.
-        watch_and_prune
+        # OJO: acá ANTES se llamaba a watch_and_prune "para reflejar la realidad al toque" —
+        # ese era el bug real detrás de las caídas en uso intensivo, confirmado con el log
+        # diagnóstico: la app llama a "status" cada ~1.5s (y la WebUI también) mientras
+        # service.sh corre su propio watch_and_prune cada 2s en paralelo, SIEMPRE, tenga la
+        # app abierta o no. Dos-tres procesos root sueltos leyendo y escribiendo el mismo
+        # marcador de gracia en $MISS_DIR sin ningún lock entre ellos: un salto de "recién
+        # empezado" a "ya se cumplió el margen" en 3 segundos con GRACE_SECONDS=120 (visto en
+        # el log) no tiene otra explicación sensata que esa carrera. Ajustar el número del
+        # margen nunca lo iba a arreglar porque el problema no era el número, era que dos
+        # procesos pisaban el mismo archivo a la vez. Ahora hay un solo dueño de esa lógica:
+        # el loop de service.sh. "status" solo reporta lo que hay, sin tocar el marcador.
         [ -f "$CONF" ] || exit 0
         while IFS='|' read -r SRC DEST ENABLED || [ -n "$SRC" ]; do
             [ -z "$SRC" ] && continue
