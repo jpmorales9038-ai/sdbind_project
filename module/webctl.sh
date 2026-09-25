@@ -23,17 +23,6 @@ case "$1" in
     unmount)
         # "Desmontar todo" es intencional: mientras este archivo exista, _watch_cb (ver
         # functions.sh) no va a reintentar remontar nada solo, aunque el origen siga ahí.
-        #
-        # DIAGNÓSTICO: el log del 25/09 mostró un "Desmontado" en medio de una partida sin
-        # que _watch_cb hubiera arrancado ninguna cuenta de gracia ni self-heal — o sea, no
-        # fue este módulo desmontando por su cuenta. Este es justamente el botón que, tocado
-        # sin querer (o con querer, sin darse cuenta de que iba a sacar del juego), produce
-        # exactamente ese patrón: desmonta YA, sin pasar por _watch_cb, y además dejaba
-        # marcado NOHEAL_MARKER, así que el self-heal no reintentaba después — coincide con
-        # que ese log no muestre ningún "Bind caído solo" tras el desmontaje, pese a que el
-        # origen seguía presente un rato más (src=1 en el HB siguiente). unmount_one ahora
-        # deja registrada la cadena de procesos que pidió esto (ver _caller_chain en
-        # functions.sh), así que la próxima vez el log dice solo quién lo tocó.
         touch "$NOHEAL_MARKER" 2>/dev/null
         UNMOUNT_REASON="webctl unmount (botón Desmontar todo, app o WebUI)"
         unmount_all

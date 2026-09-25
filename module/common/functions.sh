@@ -10,159 +10,29 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG"
 }
 
-# En Android moderno, /storage/emulated/0 lo sirve el proceso de MediaProvider vía FUSE
-# (ya no el viejo binario "sdcard" aparte). Los logs muestran el bind cayéndose SOLO
-# (origen y volumen de la SD/OTG intactos) justo cuando la RAM libre del sistema se
-# desploma a niveles críticos (~130-300MB) — el patrón típico de que el kernel mató/reinició
-# ese proceso como último recurso, lo que se lleva puesto cualquier --rbind montado encima
-# de su punto de montaje. Bajarle el oom_score_adj lo pone casi al nivel de system_server:
-# el OOM killer preferirá matar otra cosa antes que a él. No es magia — si de verdad no
-# queda NADA más que matar, esto no lo va a salvar — pero en la práctica hay screens en
-# background y demás candidatos antes de llegar a un proceso del sistema protegido así.
-# Se reaplica periódicamente porque si igual llegara a reiniciarse, el PID cambia.
-# Vuelca al log (pid, oom_score_adj ACTUAL y cmdline) cualquier proceso vivo relacionado con
-# media/fuse/storage. Se usa tanto una vez al arrancar como, más importante, justo en el
-# instante de una caída del bind (ver _watch_cb): compara ahí si el proceso que protegimos
-# seguía vivo con adj=-1000 (entonces lo tiró otra cosa, no un OOM-kill de ESE proceso) o si
-# cambió de PID (lo mataron y volvió a levantar pese a la protección) — la foto de arranque
-# sola no alcanza para distinguir un caso del otro.
-_dump_media_procs() {
-    reason="$1"
-    for pdir in /proc/[0-9]*; do
-        pid="${pdir#/proc/}"
-        cmdline=$(tr '\0' ' ' < "$pdir/cmdline" 2>/dev/null)
-        [ -n "$cmdline" ] || continue
-        case "$cmdline" in
-            *sdcard_bind_ui*) continue ;;
-            *media*|*fuse*|*sdcard*|*vold*|*storage*|*provider*|*Media*|*Fuse*|*Sdcard*|*Vold*|*Storage*|*Provider*) ;;
-            *) continue ;;
-        esac
-        adj=$(cat "$pdir/oom_score_adj" 2>/dev/null)
-        log "DIAG[$reason] pid=$pid adj=${adj:-?}: $cmdline"
-    done
-}
-
-# Dos logs distintos ya mostraron lo mismo: MediaProvider y vold siguen vivos y protegidos
-# (adj=-1000, mismo PID) justo cuando el bind se cae — descartado que sea un proceso al que
-# maten. /proc no puede decir MÁS que eso; lo que falta es lo que el propio Android anota en
-# su log del sistema (vold y StorageManagerService suelen loguear sus propias acciones de
-# remount/reset con motivo incluido). Se pide solo el buffer reciente ("-d", no sigue en
-# vivo) para no bloquear, filtrado a lo relevante para no inundar mount.log.
-_dump_logcat_slice() {
-    logcat -d -t 500 2>/dev/null \
-        | grep -iE 'vold|fuse|sdcardfs|passthrough|native_boot|mediaprovider|storagemanager|externalstorage' \
-        | tail -n 60 \
-        | while IFS= read -r ll; do
-            # Un log mostró un PID leyendo justo "fuse_enabled" y "fuse.passthrough.enable"
-            # (el patrón típico de un puente FUSE (re)inicializándose); otro log con 3
-            # caídas más no repitió nada de logcat, así que esa pista bien puede haber sido
-            # coincidencia (otra app leyendo esas mismas propiedades por su cuenta) y no la
-            # causa real. Se resuelve el nombre del PID ACÁ, al leer logcat, por si vuelve a
-            # aparecer algo — es lo más cerca posible en el tiempo del momento real.
-            lpid=$(echo "$ll" | awk '{print $3}')
-            name=""
-            case "$lpid" in
-                ''|*[!0-9]*) ;;
-                *) name=$(tr '\0' ' ' < "/proc/$lpid/cmdline" 2>/dev/null) ;;
-            esac
-            if [ -n "$name" ]; then
-                log "DIAG[logcat pid=$lpid name=$name] $ll"
-            else
-                log "DIAG[logcat] $ll"
-            fi
-        done
-}
-
-# logcat es el log de USERSPACE (apps + framework); si esto es el kernel matando algo bajo
-# presión de memoria (el OOM killer "de verdad", el que anota "Out of memory: Kill process
-# ...", o un hilo/workqueue del propio driver de FUSE reiniciándose a nivel de kernel),
-# jamás va a aparecer ahí — solo en el log del kernel. "dmesg" no consume el buffer (a
-# diferencia de leer /proc/kmsg), así que es seguro pedirlo repetidas veces.
-_dump_dmesg_slice() {
-    # BUG (build de logs anterior, v2.8.26): esto capturaba "las últimas 60 líneas que
-    # matcheen", sin filtrar por tiempo — dmesg es un buffer circular que puede tener horas
-    # (o desde el arranque) de historial. En un log real, las dos fotos tomadas con 11s de
-    # diferencia salieron BYTE POR BYTE IDÉNTICAS, con timestamps de kernel de ~229-353s
-    # (minuto 4-6 post-boot) — es decir, ruido viejo del arranque, no algo pasando en el
-    # momento real de la caída del bind. Sin un punto de referencia, esto no servía para
-    # descartar ni confirmar nada.
-    #
-    # Para no repetir el error sin depender de flags de "dmesg -T"/formatos de fecha que ya
-    # nos mordieron antes con toybox (ver el historial de _protect_media_fuse con "ps"), se
-    # deja el uptime actual como referencia en el propio log — la comparación "¿es viejo o
-    # es de ahora?" se hace a ojo después, mirando ambos números, en vez de confiar en que
-    # este equipo en particular soporte alguna sintaxis de filtrado por fecha en dmesg/date.
-    #
-    # Aprovechado también para ampliar qué se busca: "oom|fuse|sdcardfs" solo cubre el lado
-    # de gestión de memoria/Android. Si vold y MediaProvider siguen sanos (como confirman los
-    # DIAG[drop] de dos logs seguidos) pero el volumen igual desaparece, lo que falta mirar es
-    # el controlador de la propia tarjeta/lector a nivel kernel: cortes de comando, timeouts,
-    # resets — típico de una SD barata o un adaptador OTG flojeando bajo I/O sostenida.
-    now_up=$(awk '{print $1}' /proc/uptime 2>/dev/null)
-    log "DIAG[dmesg] === uptime actual: ${now_up:-?}s — comparar contra el [n.nnn] de cada línea de abajo; si son mucho menores, es ruido viejo del arranque, no de este momento ==="
-    dmesg 2>/dev/null \
-        | grep -iE 'oom|out of memory|kill process|fuse|sdcardfs|mmc[0-9]|sdhci|mmcblk|cqhci|cmd timeout|data timeout|card removed|card error|i/?o error|blk_update_request|ext4-fs error|exfat' \
-        | tail -n 80 \
-        | while IFS= read -r dl; do
-            log "DIAG[dmesg] $dl"
-        done
-}
-
+# En Android moderno, /storage/emulated/0 lo sirve el proceso de MediaProvider vía FUSE.
+# Bajo RAM crítica el kernel puede matar/reiniciar ese proceso como último recurso, lo que
+# se lleva puesto cualquier --rbind montado encima de su punto de montaje. Bajarle el
+# oom_score_adj lo pone casi al nivel de system_server, así el OOM killer prefiere matar
+# otra cosa antes. Se reaplica cada ciclo por si el proceso reapareciera con otro PID.
 _protect_media_fuse() {
-    # BUG (primer log): "ps -A -o PID,NAME" nunca matcheó nada en toda la sesión (mp=? se
-    # mantuvo así en +100 líneas de heartbeat) — el toybox de varios equipos rechaza specs de
-    # columna en mayúsculas para "-o" y devuelve la lista vacía sin avisar.
-    #
-    # BUG (segundo log, v2.8.20): cambiado a "ps -A" plano + recorte de columna a mano,
-    # mp=? SIGUE sin cambiar — este equipo tampoco da ninguna línea de "ps -A" que matchee.
-    # Ya van dos intentos con "ps" en variantes distintas sin resultado; en vez de adivinar
-    # un tercer patrón a ciegas, se deja de depender de "ps" del todo y se lee directo de
-    # /proc/<pid>/cmdline (la fuente original de la que "ps" saca ese dato en primer lugar,
-    # separada por NUL en vez de espacios) — más portable porque no depende de qué columnas o
-    # mayúsculas acepte el "ps" de este equipo en particular.
-    #
-    # RESULTADO (tercer log, v2.8.21): funcionó — mp=protegido aparece desde el primer
-    # heartbeat del loop principal. El volcado de arranque en sí salió casi vacío (corrió
-    # durante post-fs-data, con el reloj todavía sin sincronizar, antes de que MediaProvider
-    # llegara a arrancar) así que no sirvió de mucho — se deja de disparar solo una vez y en
-    # su lugar se repite cada 30s mientras no se haya encontrado nada, para no perderse el
-    # arranque tardío del proceso.
-    mkdir -p "$MISS_DIR" 2>/dev/null
-    found_marker="$MISS_DIR/.mediaprovider_found"
-    dump_this_round=0
-    if [ ! -f "$found_marker" ]; then
-        dump_stamp="$MISS_DIR/.procdump_last"
-        now=$(date +%s 2>/dev/null || echo 0)
-        last=0
-        [ -f "$dump_stamp" ] && last=$(cat "$dump_stamp" 2>/dev/null)
-        case "$last" in ''|*[!0-9]*) last=0 ;; esac
-        if [ $((now - last)) -ge 30 ]; then
-            echo "$now" > "$dump_stamp" 2>/dev/null
-            dump_this_round=1
-        fi
-    fi
-    [ "$dump_this_round" = "1" ] && _dump_media_procs "boot"
     for pdir in /proc/[0-9]*; do
         pid="${pdir#/proc/}"
         cmdline=$(tr '\0' ' ' < "$pdir/cmdline" 2>/dev/null)
         [ -n "$cmdline" ] || continue
         case "$cmdline" in
             *media.module*|*providers.media*|*android.process.media*)
-                echo 1 > "$found_marker" 2>/dev/null
                 current=$(cat "$pdir/oom_score_adj" 2>/dev/null)
                 [ "$current" = "-1000" ] && continue
                 echo -1000 > "$pdir/oom_score_adj" 2>/dev/null
                 after=$(cat "$pdir/oom_score_adj" 2>/dev/null)
                 if [ "$after" != "-1000" ]; then
-                    # Si esto aparece en el log, el problema ya no es "no lo encontramos" sino
-                    # que algo (SELinux u otra restricción del equipo) bloquea la escritura
-                    # pese a ser root.
+                    # Algo (SELinux u otra restricción del equipo) bloquea la escritura pese a ser root.
                     _log_throttled "oomprotect.fail" "No se pudo proteger PID $pid (quedó oom_score_adj=$after)" 30
                 fi
                 ;;
         esac
     done
-
 }
 
 ensure_slash() {
@@ -295,7 +165,6 @@ unmount_one() {
     # remove_entry, _watch_cb). Si nadie lo seteó, queda "desconocido" — eso mismo ya es una
     # pista (significa que se agregó un nuevo call site sin etiquetar).
     reason="${UNMOUNT_REASON:-desconocido}"
-    chain_logged=0
     # Con --rbind, un mount anidado dentro del origen queda como una entrada de mount APARTE
     # bajo DEST (no solo una carpeta) — hay que desmontar de más anidado a menos anidado, no
     # solo el de arriba, o quedan mounts colgando.
@@ -303,10 +172,6 @@ unmount_one() {
         awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2- |
     while IFS= read -r mp; do
         [ -n "$mp" ] || continue
-        if [ "$chain_logged" = "0" ]; then
-            log "DIAG[unmount-caller motivo=$reason] $(_caller_chain)"
-            chain_logged=1
-        fi
         run_global umount -l "$mp" 2>>"$LOG" && log "Desmontado (motivo=$reason): $mp"
     done
 }
@@ -352,22 +217,8 @@ NOHEAL_MARKER="$MODDIR/.no_autoheal"
 # Con poca RAM, Android puede matar y reiniciar por un instante el proceso que sirve
 # /mnt/media_rw (FUSE/MediaProvider): durante ese lapso "$SRC" da falso negativo aunque la
 # SD/OTG siga físicamente conectada. GRACE_SECONDS es cuánto tiene que faltar el origen, de
-# forma sostenida entre chequeos, antes de darlo por desconectado de verdad.
-#
-# BUG (v2.8.11 y anteriores): con 8s esto alcanzaba a dispararse en falso durante uso
-# intensivo de una carpeta vinculada (un juego leyendo/escribiendo mucho rato seguido):
-# bajo esa carga, el propio puente FUSE/media provider que sirve /mnt/media_rw puede
-# saturarse o reiniciarse solo por un momento, y mientras tanto SU PROPIO punto de montaje
-# puede faltar de /proc/1/mounts (lo que ve _device_present) más de esos 8s — no porque la
-# SD/OTG se haya desconectado, sino porque el proveedor tarda en reaparecer bajo carga.
-#
-# BUG (v2.8.13 y anteriores): 45s tampoco alcanzaba en uso REALMENTE intensivo y sostenido
-# (partidas largas con lecturas/escrituras pesadas todo el rato) en tarjetas SD lentas: el
-# proveedor puede tardar más de eso en reponerse, y para cuando el siguiente watch_and_prune
-# corre, la RAM ya se recuperó — _low_mem() ve "todo normal" y no llega a congelar el conteo
-# aunque la caída de memoria que causó el corte haya sido hace instantes. 120s da margen para
-# ese caso extremo sin dejar de detectar una desconexión real (que no se revierte sola) en un
-# tiempo razonable.
+# forma sostenida entre chequeos, antes de darlo por desconectado de verdad. 120s da margen
+# incluso para uso intensivo y sostenido (partidas largas) en tarjetas SD lentas.
 GRACE_SECONDS=120
 
 # Umbral de RAM disponible (KB) por debajo del cual el sistema puede estar matando procesos
@@ -384,8 +235,7 @@ LOW_MEM_STICKY_SECONDS=90
 LOW_MEM_MARKER="$MODDIR/.watch_grace/.low_mem_seen"
 
 # Poca RAM ahora mismo (según /proc/meminfo). Si no se puede leer, se asume que NO hay poca
-# RAM (falso negativo aquí es más seguro que pausar el conteo sin motivo real). Además deja
-# constancia de cuándo fue la última vez que se vio baja, para _low_mem_recently().
+# RAM (falso negativo aquí es más seguro que pausar el conteo sin motivo real).
 _mem_avail_kb() {
     awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null
 }
@@ -414,31 +264,6 @@ _low_mem_recently() {
     esac
     now=$(date +%s 2>/dev/null || echo 0)
     [ $((now - since)) -lt "$LOW_MEM_STICKY_SECONDS" ]
-}
-
-# DIAGNÓSTICO: el log del 25/09 mostró un "Desmontado: ..." en medio de una partida SIN que
-# lo precediera ni "Auto-desmontado" (rama de _watch_cb por desconexión real) ni "Bind caído
-# solo" (rama de self-heal) — ninguna de las dos cuentas de gracia había ni empezado a correr
-# ("iniciando cuenta de gracia" no aparece en todo el log). O sea: ESTE build de watch_and_prune
-# no fue quien lo desmontó. Solo queda: una acción manual (app/WebUI tocando "Desmontar todo" o
-# eliminando el vínculo) o algo externo al módulo. Esta función deja constancia de la cadena de
-# procesos padres del que ejecuta el desmontaje (sh -> su -> app, o sh -> ksud -> webui, etc.)
-# para que la próxima vez que esto pase, el log diga solo quién lo hizo en vez de tener que
-# volver a descartar teorías a ciegas.
-_caller_chain() {
-    chain=""
-    pid=$$
-    i=0
-    while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null && [ "$i" -lt 6 ]; do
-        cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
-        [ -n "$cmd" ] || cmd="?"
-        chain="$chain${chain:+ <- }${cmd% }(pid=$pid)"
-        ppid=$(awk '/^PPid:/{print $2}' "/proc/$pid/status" 2>/dev/null)
-        case "$ppid" in ''|*[!0-9]*) break ;; esac
-        pid="$ppid"
-        i=$((i + 1))
-    done
-    echo "$chain"
 }
 
 # Log de una línea, como máximo una vez cada $3 segundos por $1 (clave arbitraria). Para
@@ -503,35 +328,15 @@ _watch_cb() {
     SRC="$1"; DEST="$2"; ENABLED="$3"
     [ "$ENABLED" = "1" ] || return 0
     if ! is_mounted "$DEST"; then
-        # NUEVO (a partir de este log): el bind puede haberse caído solo sin que la SD/OTG
-        # se haya ido — el log confirma src=1 vol=1 sostenido mientras mounted pasa a 0,
-        # justo en el momento de RAM más baja. La causa más probable: el proveedor FUSE que
-        # sirve /storage/emulated/0 se reinicia por presión de memoria (Android puede matarlo
-        # y levantarlo de nuevo con RAM baja), lo que se lleva puesto cualquier bind montado
-        # encima de su punto de montaje viejo, aunque la SD/OTG en sí siga perfecta. Antes de
-        # esto, _watch_cb solo sabía protegerse de falsos desmontajes — nunca remontaba nada.
-        # Si el origen sigue ahí, lo remontamos solos en vez de dejarlo caído hasta que el
-        # usuario note que faltan archivos y tenga que tocar "Montar todo" a mano.
+        # El bind puede haberse caído solo sin que la SD/OTG se haya ido (el proveedor FUSE
+        # que sirve /storage/emulated/0 se reinicia por presión de memoria y se lleva puesto
+        # cualquier bind montado encima de su punto de montaje viejo). Si el origen sigue
+        # ahí, se remonta solo en vez de dejarlo caído hasta que el usuario note que faltan
+        # archivos y tenga que tocar "Montar todo" a mano.
         if [ -d "$SRC" ]; then
             [ -f "$NOHEAL_MARKER" ] && return 0
             _log_throttled "$DEST.remount" "Bind caído solo (origen sigue presente, mem=$(_mem_avail_kb)KB) — remontando: $SRC -> $DEST" 10
-            # DIAGNÓSTICO: throttled aparte del mensaje de arriba (si el bind cae en ráfaga
-            # varias veces seguidas, no tiene sentido repetir la misma foto cada vez).
-            # Solo se decide ACÁ si toca diagnosticar esta vez; el volcado en sí se hace
-            # después de remontar (más abajo) para no sumarle latencia a la recuperación.
-            do_diag=0
-            _log_throttled "$DEST.dropdump" "DIAG: foto de procesos y logcat tomada (ver líneas siguientes)" 20 && do_diag=1
             mount_one "$SRC" "$DEST"
-            if [ "$do_diag" = "1" ]; then
-                # Dos logs seguidos (sesiones distintas) muestran el mismo resultado: el PID
-                # de MediaProvider y de vold no cambian y siguen con adj=-1000 en el instante
-                # de la caída — no es un proceso muriendo. El próximo dato que falta no lo
-                # tiene /proc: es lo que Android mismo loguea (vold/StorageManagerService
-                # suelen anotar sus propias acciones de remount en logcat).
-                _dump_media_procs "drop"
-                _dump_logcat_slice
-                _dump_dmesg_slice
-            fi
         fi
         return 0
     fi
@@ -544,8 +349,6 @@ _watch_cb() {
             since=$(cat "$marker" 2>/dev/null)
             case "$since" in ''|*[!0-9]*) since=0 ;; esac
             now=$(date +%s 2>/dev/null || echo 0)
-            # DIAGNÓSTICO (build de logs): esto confirma que la ausencia fue transitoria y
-            # se resolvió sola, con la duración real de principio a fin.
             log "Origen reapareció tras $((now - since))s de ausencia: $SRC -> $DEST"
         fi
         rm -f "$marker" 2>/dev/null
@@ -556,7 +359,6 @@ _watch_cb() {
         # hace poco) justo de RAM: es el momento en que más probable es que esto sea un
         # falso negativo y no una desconexión real. El marcador (si ya existía de antes)
         # queda congelado tal cual, a la espera de que la memoria termine de recuperarse.
-        # DIAGNÓSTICO: throttled porque puede repetirse chequeo tras chequeo mientras dura.
         _log_throttled "$DEST.lowmem" "Origen ausente + RAM baja/reciente (mem=$(_mem_avail_kb)KB), conteo congelado: $SRC -> $DEST" 20
         return 0
     fi
@@ -567,8 +369,6 @@ _watch_cb() {
         # el margen de abajo. Se limpia el marcador en vez de congelarlo (a diferencia de
         # _low_mem): acá sabemos que el origen está bien, así que un miss suelto posterior no
         # debería heredar un conteo viejo de otra causa.
-        # DIAGNÓSTICO: esta es la teoría de "saturación de I/O" en acción — si el problema
-        # real es otra cosa, esta línea NO debería aparecer justo antes de un desmontaje.
         _log_throttled "$DEST.satlog" "Subcarpeta ausente pero el volumen SD/OTG sigue montado (I/O saturada, no se cuenta): $SRC" 15
         rm -f "$marker" 2>/dev/null
         return 0
@@ -576,8 +376,6 @@ _watch_cb() {
     now=$(date +%s 2>/dev/null || echo 0)
     if [ ! -f "$marker" ]; then
         echo "$now" > "$marker" 2>/dev/null
-        # DIAGNÓSTICO: arranque de un episodio real de ausencia — ni RAM baja ni volumen
-        # presente lo explican, así que empieza a correr la cuenta de gracia de verdad.
         log "Origen ausente de verdad, iniciando cuenta de gracia (mem=$(_mem_avail_kb)KB): $SRC -> $DEST"
         return 0
     fi
@@ -601,31 +399,6 @@ _watch_cb() {
         unset UNMOUNT_REASON
         rm -f "$marker" 2>/dev/null
     fi
-}
-
-# Diagnóstico temporal (build de logs, ver comentario en service.sh): deja un timeline fijo
-# de RAM disponible + el estado real de cada bind (existe el origen / sigue el volumen
-# montado / sigue is_mounted el destino) cada pocos segundos, sin depender de que algo
-# "pase" para que quede constancia. Sirve para confirmar o descartar de una vez la teoría de
-# saturación de I/O bajo uso intensivo, en vez de seguir ajustando GRACE_SECONDS a ciegas.
-# Sacar (o dejar de llamar desde service.sh) una vez encontrada la causa real.
-heartbeat_log() {
-    avail=$(_mem_avail_kb)
-    mp="mp=?"
-    [ -f "$MISS_DIR/.mediaprovider_found" ] && mp="mp=protegido"
-    line="HB mem=${avail:-?}KB $mp"
-    if [ -f "$CONF" ]; then
-        while IFS='|' read -r SRC DEST ENABLED || [ -n "$SRC" ]; do
-            [ -z "$SRC" ] && continue
-            case "$SRC" in \#*) continue ;; esac
-            [ "$ENABLED" = "1" ] || continue
-            d_src=0; [ -d "$SRC" ] && d_src=1
-            d_vol=0; _device_present "$SRC" && d_vol=1
-            d_mnt=0; is_mounted "$DEST" && d_mnt=1
-            line="$line | $(basename "$DEST"): src=$d_src vol=$d_vol mounted=$d_mnt"
-        done < "$CONF"
-    fi
-    log "$line"
 }
 
 # Recorre todos los binds habilitados y desmonta los que quedaron "colgando" porque su
