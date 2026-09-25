@@ -7,6 +7,10 @@ MODDIR="/data/adb/modules/sdcard_bind_ui"
 # al boot, todo lo habilitado en mounts.conf se intenta montar igual, así que la
 # autocuración también debería estar activa desde el vamos.
 rm -f "$NOHEAL_MARKER" 2>/dev/null
+# Mismo criterio: los marcadores de "desconexión real" (ver _disc_marker en functions.sh) son
+# de la sesión anterior. Al arrancar de nuevo, el self-heal debería estar disponible desde el
+# vamos para cualquier entrada, no seguir bloqueado por algo que pasó antes de reiniciar.
+rm -f "$MISS_DIR"/.disc_* 2>/dev/null
 _protect_media_fuse
 
 log "== post-fs-data: intento temprano de montaje =="

@@ -324,6 +324,18 @@ _miss_marker() {
     echo "$MISS_DIR/$(echo "$1" | tr '/ ' '__')"
 }
 
+# Marcador por DEST que dice "esto se desconectó de verdad al menos una vez" (lo planta
+# _watch_cb más abajo, justo cuando confirma una desconexión real tras GRACE_SECONDS). Mientras
+# exista, el self-heal de acá abajo NO remonta solo aunque el origen vuelva a aparecer: eso es
+# justo "insertar la unidad", y de eso se encarga el botón "Montar todo" (webctl.sh apply lo
+# limpia), no el vigilante en segundo plano. Sin este marcador, _watch_cb no puede distinguir
+# "el proveedor FUSE se reinició y el origen nunca se fue" (self-heal, sí queremos remontar
+# solo) de "sacaron la SD/OTG y la volvieron a poner" (no queremos remontar solo).
+_disc_marker() {
+    mkdir -p "$MISS_DIR" 2>/dev/null
+    echo "$MISS_DIR/.disc_$(echo "$1" | tr '/ ' '__')"
+}
+
 _watch_cb() {
     SRC="$1"; DEST="$2"; ENABLED="$3"
     [ "$ENABLED" = "1" ] || return 0
@@ -335,6 +347,14 @@ _watch_cb() {
         # archivos y tenga que tocar "Montar todo" a mano.
         if [ -d "$SRC" ]; then
             [ -f "$NOHEAL_MARKER" ] && return 0
+            if [ -f "$(_disc_marker "$DEST")" ]; then
+                # Esto ya se desconectó de verdad una vez y ahora el origen volvió a aparecer
+                # (SD/OTG reinsertada). Insertar la unidad NO debe automontar los binds: para
+                # eso está el botón "Montar todo". Se deja sin montar hasta que el usuario lo
+                # pida (webctl.sh apply limpia este marcador).
+                _log_throttled "$DEST.reinserted" "Origen reconectado tras una desconexión real: no se automonta, esperando 'Montar todo' ($SRC -> $DEST)" 30
+                return 0
+            fi
             _log_throttled "$DEST.remount" "Bind caído solo (origen sigue presente, mem=$(_mem_avail_kb)KB) — remontando: $SRC -> $DEST" 10
             mount_one "$SRC" "$DEST"
         fi
@@ -398,6 +418,10 @@ _watch_cb() {
         unmount_one "$DEST"
         unset UNMOUNT_REASON
         rm -f "$marker" 2>/dev/null
+        # Desconexión real confirmada (no un hipo de RAM/I-O): a partir de acá, si el origen
+        # reaparece (reinsertaron la SD/OTG), que quede sin montar hasta que el usuario toque
+        # "Montar todo" — ver el chequeo de _disc_marker más arriba en esta misma función.
+        touch "$(_disc_marker "$DEST")" 2>/dev/null
     fi
 }
 
@@ -415,6 +439,7 @@ remove_entry() {
     unmount_one "$DEST"
     unset UNMOUNT_REASON
     rm -f "$(_miss_marker "$DEST")" 2>/dev/null
+    rm -f "$(_disc_marker "$DEST")" 2>/dev/null
     [ -f "$CONF" ] || return 0
     tmp="$CONF.tmp.$$"
     : > "$tmp"

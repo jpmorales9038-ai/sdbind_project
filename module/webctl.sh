@@ -13,6 +13,10 @@ case "$1" in
         # El usuario está pidiendo montar a propósito: si "Desmontar todo" había dejado la
         # autocuración pausada, la reactivamos.
         rm -f "$NOHEAL_MARKER" 2>/dev/null
+        # Y si alguna entrada había quedado marcada como "desconexión real" (ver _disc_marker
+        # en functions.sh), se limpia: el usuario mismo está pidiendo montar ahora, así que a
+        # partir de este punto el self-heal puede volver a actuar solo sobre ella.
+        rm -f "$MISS_DIR"/.disc_* 2>/dev/null
         UNMOUNT_REASON="webctl apply (reintento/Guardar y montar, app o WebUI)"
         unmount_all
         unset UNMOUNT_REASON
