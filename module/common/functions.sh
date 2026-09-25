@@ -53,12 +53,12 @@ _dump_logcat_slice() {
         | grep -iE 'vold|fuse|sdcardfs|passthrough|native_boot|mediaprovider|storagemanager|externalstorage' \
         | tail -n 60 \
         | while IFS= read -r ll; do
-            # El log anterior mostró un PID leyendo justo "fuse_enabled" y
-            # "fuse.passthrough.enable" (el patrón típico de un puente FUSE
-            # (re)inicializándose) que NO era ninguno de los que veníamos protegiendo ni
-            # apareció en nuestra propia foto de /proc — probablemente porque ya no existía
-            # para cuando escaneamos después. Se resuelve el nombre ACÁ, al leer logcat, que
-            # es lo más cerca posible en el tiempo del momento real.
+            # Un log mostró un PID leyendo justo "fuse_enabled" y "fuse.passthrough.enable"
+            # (el patrón típico de un puente FUSE (re)inicializándose); otro log con 3
+            # caídas más no repitió nada de logcat, así que esa pista bien puede haber sido
+            # coincidencia (otra app leyendo esas mismas propiedades por su cuenta) y no la
+            # causa real. Se resuelve el nombre del PID ACÁ, al leer logcat, por si vuelve a
+            # aparecer algo — es lo más cerca posible en el tiempo del momento real.
             lpid=$(echo "$ll" | awk '{print $3}')
             name=""
             case "$lpid" in
@@ -70,6 +70,20 @@ _dump_logcat_slice() {
             else
                 log "DIAG[logcat] $ll"
             fi
+        done
+}
+
+# logcat es el log de USERSPACE (apps + framework); si esto es el kernel matando algo bajo
+# presión de memoria (el OOM killer "de verdad", el que anota "Out of memory: Kill process
+# ...", o un hilo/workqueue del propio driver de FUSE reiniciándose a nivel de kernel),
+# jamás va a aparecer ahí — solo en el log del kernel. "dmesg" no consume el buffer (a
+# diferencia de leer /proc/kmsg), así que es seguro pedirlo repetidas veces.
+_dump_dmesg_slice() {
+    dmesg 2>/dev/null \
+        | grep -iE 'oom|out of memory|kill process|fuse|sdcardfs' \
+        | tail -n 60 \
+        | while IFS= read -r dl; do
+            log "DIAG[dmesg] $dl"
         done
 }
 
@@ -461,6 +475,7 @@ _watch_cb() {
                 # suelen anotar sus propias acciones de remount en logcat).
                 _dump_media_procs "drop"
                 _dump_logcat_slice
+                _dump_dmesg_slice
             fi
         fi
         return 0
