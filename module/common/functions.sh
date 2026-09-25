@@ -313,12 +313,10 @@ _device_present() {
     [ -n "$root" ]
 }
 
-# Marcador por DEST con el instante (epoch) en que se lo vio faltar por primera vez. No se
-# bloquea acá con un sleep/retry: esta función corre también dentro de "status"
-# (webctl.sh), al que la app le pregunta cada ~1.5s para refrescar la pantalla, y una
-# espera de varios segundos ahí congelaría la UI. En cambio, cada llamada (separada en el
-# tiempo por el propio loop de service.sh o por el polling de la app) solo anota o revisa
-# la marca, así el margen se cubre solo repitiendo chequeos rápidos.
+# Marcador por DEST con el instante (epoch) en que se lo vio faltar por primera vez. Solo lo
+# toca watch_and_prune (dueño único, ver el "OJO" en el caso "status" de webctl.sh) — no hay
+# sleep/retry acá adentro, cada llamada del loop de service.sh (cada 2s) solo anota o revisa
+# la marca, así el margen se cubre solo repitiendo chequeos rápidos en el tiempo.
 _miss_marker() {
     mkdir -p "$MISS_DIR" 2>/dev/null
     echo "$MISS_DIR/$(echo "$1" | tr '/ ' '__')"
@@ -357,6 +355,21 @@ _watch_cb() {
     # el tiempo) nunca dispara esto.
     if ! _device_present "$SRC"; then
         touch "$dmark" 2>/dev/null
+        if is_mounted "$DEST"; then
+            # Señal FUERTE (todo el punto de montaje del volumen desapareció, no solo la
+            # subcarpeta puntual) — no hace falta esperar los 120s de margen para esto, ese
+            # margen es para la señal débil de más abajo (I/O saturada). Si no desmontamos
+            # ya, el bind queda "mounted" apuntando a la nada, y en cuanto reinsertan la
+            # unidad el kernel lo revive solo sin pasar por mount_one ni por el chequeo de
+            # $dmark de acá abajo — eso es lo que hacía que una unidad reinsertada apareciera
+            # "montada" en vez de "presente" esperando el botón.
+            log "Auto-desmontado (volumen desconectado): $SRC -> $DEST"
+            UNMOUNT_REASON="watch_cb (volumen ausente, desmontaje inmediato sin esperar margen)"
+            unmount_one "$DEST"
+            unset UNMOUNT_REASON
+            rm -f "$(_miss_marker "$DEST")" 2>/dev/null
+            return 0
+        fi
     fi
 
     if ! is_mounted "$DEST"; then
