@@ -79,9 +79,30 @@ _dump_logcat_slice() {
 # jamás va a aparecer ahí — solo en el log del kernel. "dmesg" no consume el buffer (a
 # diferencia de leer /proc/kmsg), así que es seguro pedirlo repetidas veces.
 _dump_dmesg_slice() {
+    # BUG (build de logs anterior, v2.8.26): esto capturaba "las últimas 60 líneas que
+    # matcheen", sin filtrar por tiempo — dmesg es un buffer circular que puede tener horas
+    # (o desde el arranque) de historial. En un log real, las dos fotos tomadas con 11s de
+    # diferencia salieron BYTE POR BYTE IDÉNTICAS, con timestamps de kernel de ~229-353s
+    # (minuto 4-6 post-boot) — es decir, ruido viejo del arranque, no algo pasando en el
+    # momento real de la caída del bind. Sin un punto de referencia, esto no servía para
+    # descartar ni confirmar nada.
+    #
+    # Para no repetir el error sin depender de flags de "dmesg -T"/formatos de fecha que ya
+    # nos mordieron antes con toybox (ver el historial de _protect_media_fuse con "ps"), se
+    # deja el uptime actual como referencia en el propio log — la comparación "¿es viejo o
+    # es de ahora?" se hace a ojo después, mirando ambos números, en vez de confiar en que
+    # este equipo en particular soporte alguna sintaxis de filtrado por fecha en dmesg/date.
+    #
+    # Aprovechado también para ampliar qué se busca: "oom|fuse|sdcardfs" solo cubre el lado
+    # de gestión de memoria/Android. Si vold y MediaProvider siguen sanos (como confirman los
+    # DIAG[drop] de dos logs seguidos) pero el volumen igual desaparece, lo que falta mirar es
+    # el controlador de la propia tarjeta/lector a nivel kernel: cortes de comando, timeouts,
+    # resets — típico de una SD barata o un adaptador OTG flojeando bajo I/O sostenida.
+    now_up=$(awk '{print $1}' /proc/uptime 2>/dev/null)
+    log "DIAG[dmesg] === uptime actual: ${now_up:-?}s — comparar contra el [n.nnn] de cada línea de abajo; si son mucho menores, es ruido viejo del arranque, no de este momento ==="
     dmesg 2>/dev/null \
-        | grep -iE 'oom|out of memory|kill process|fuse|sdcardfs' \
-        | tail -n 60 \
+        | grep -iE 'oom|out of memory|kill process|fuse|sdcardfs|mmc[0-9]|sdhci|mmcblk|cqhci|cmd timeout|data timeout|card removed|card error|i/?o error|blk_update_request|ext4-fs error|exfat' \
+        | tail -n 80 \
         | while IFS= read -r dl; do
             log "DIAG[dmesg] $dl"
         done
