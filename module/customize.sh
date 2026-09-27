@@ -58,6 +58,14 @@ if [ -f "$APK" ]; then
     ui_print "- Instalando SD Bind Manager"
     if pm install -r "$APK" >/dev/null 2>&1; then
         ui_print "- App instalada / actualizada"
+        # "pm install" por sí solo deja un dexopt mínimo ("quicken"): el baseline profile
+        # que va empaquetado en el APK (app/src/main/baseline-prof.txt + los que traen
+        # Compose/Material3 en sus propios AAR) queda sin usarse hasta el próximo
+        # mantenimiento en reposo del sistema, que puede tardar horas. Eso es justo lo que
+        # causaba el lag de los primeros minutos tras reiniciar pese a tener el profile
+        # listo: nunca se compilaba a tiempo. Forzarlo acá, justo después de instalar, es lo
+        # mismo que hace Play Store en el momento de instalar.
+        cmd package compile -m speed-profile -f com.sdcardbind.manager >/dev/null 2>&1
     else
         ui_print "- No se pudo actualizar la app (firma distinta a la instalada)."
         ui_print "  Desinstalá SD Bind una vez y volvé a flashear el módulo."
