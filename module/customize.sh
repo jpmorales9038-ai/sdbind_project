@@ -1,22 +1,19 @@
 #!/system/bin/sh
 ui_print "- SD/OTG Bind Mount"
 
-OLD_MODDIR="/data/adb/modules/sdcard_bind_ui"
 CONF="$MODPATH/mounts.conf"
 LOG="$MODPATH/mount.log"
 
-# Al actualizar el módulo, Magisk/KernelSU reemplazan toda la carpeta del módulo con lo que
-# viene en el zip nuevo — el mounts.conf real del usuario (con sus vínculos ya configurados)
-# quedaba pisado por la plantilla vacía que se shippea en el proyecto, perdiendo todo en
-# cada actualización. Antes de que el resto del script toque nada, rescatamos el mounts.conf
-# (y el modo de montaje normal/agresivo, que tampoco viene en el zip — se genera solo en
-# tiempo de ejecución) de la instalación previa, si existe.
-if [ -f "$OLD_MODDIR/mounts.conf" ]; then
-    ui_print "- Conservando tus vínculos existentes"
-    cp -f "$OLD_MODDIR/mounts.conf" "$CONF"
-fi
-if [ -f "$OLD_MODDIR/mount_mode" ]; then
-    cp -f "$OLD_MODDIR/mount_mode" "$MODPATH/mount_mode"
+# customize.sh corre siempre en el directorio NUEVO de la actualización, donde mounts.conf
+# todavía no existe — sin esto, cada actualización del módulo pisaba la config real del
+# usuario con la plantilla vacía de abajo (los binds ya montados seguían andando hasta el
+# próximo reinicio, pero ese reinicio los perdía porque apply_mounts ya no tenía nada que
+# aplicar). La instalación anterior sigue viva en /data/adb/modules/<id> hasta que el
+# arranque completa el swap, así que su mounts.conf real todavía se puede leer de ahí.
+OLD="/data/adb/modules/sdcard_bind_ui/mounts.conf"
+if [ ! -f "$CONF" ] && [ -f "$OLD" ]; then
+    cp -f "$OLD" "$CONF" 2>/dev/null
+    ui_print "- Vínculos de la instalación anterior preservados"
 fi
 
 if [ ! -f "$CONF" ]; then
@@ -58,14 +55,6 @@ if [ -f "$APK" ]; then
     ui_print "- Instalando SD Bind Manager"
     if pm install -r "$APK" >/dev/null 2>&1; then
         ui_print "- App instalada / actualizada"
-        # El baseline profile lo instala y compila la propia app en runtime vía
-        # androidx.profileinstaller (sin root, sin comandos de sistema): se dispara solo al
-        # primer arranque de la app, a través de App Startup. Forzarlo acá con "cmd package
-        # compile"/"pm compile" quedó descartado: falla siempre con "Failed transaction"
-        # (bloqueo de SELinux del dominio root de KernelSU contra system_server), tanto en
-        # este momento como reintentado después del boot con el sistema ya arriba del todo —
-        # o sea que no era un problema de timing, es un camino cerrado en este contexto. La
-        # vía de profileinstaller no depende de nada de esto.
     else
         ui_print "- No se pudo actualizar la app (firma distinta a la instalada)."
         ui_print "  Desinstalá SD Bind una vez y volvé a flashear el módulo."
