@@ -54,10 +54,12 @@ done
 chmod 644 "$WEB"/*.ttf "$WEB"/*.otf 2>/dev/null
 
 APK="$MODPATH/app/sdcard-bind-manager.apk"
+AOT_MARKER="$MODPATH/.aot_ok"
 if [ -f "$APK" ]; then
     ui_print "- Instalando SD Bind Manager"
     if pm install -r "$APK" >/dev/null 2>&1; then
         ui_print "- App instalada / actualizada"
+        rm -f "$AOT_MARKER" 2>/dev/null
         # "pm install" por sí solo deja un dexopt mínimo ("quicken"): el baseline profile
         # que va empaquetado en el APK (app/src/main/baseline-prof.txt + los que traen
         # Compose/Material3 en sus propios AAR) queda sin usarse hasta el próximo
@@ -65,7 +67,21 @@ if [ -f "$APK" ]; then
         # causaba el lag de los primeros minutos tras reiniciar pese a tener el profile
         # listo: nunca se compilaba a tiempo. Forzarlo acá, justo después de instalar, es lo
         # mismo que hace Play Store en el momento de instalar.
-        cmd package compile -m speed-profile -f com.sdcardbind.manager >/dev/null 2>&1
+        #
+        # OJO: hasta ahora esto se hacía "a ciegas" (salida a /dev/null) y el lag reportado
+        # siguió igual pese a estar el comando puesto — o sea que probablemente esté
+        # fallando en este contexto (customize.sh corre en el momento de flashear el
+        # módulo, no siempre con el framework de Android 100% disponible). Ahora se guarda
+        # la salida real y solo se anota éxito si el propio comando dice que compiló algo;
+        # si falla acá, service.sh reintenta después del boot (ver más abajo), que es un
+        # momento donde el sistema seguro está arriba del todo.
+        if cmd package compile -m speed-profile -f com.sdcardbind.manager > "$MODPATH/.aot_log" 2>&1 \
+            || pm compile -m speed-profile -f com.sdcardbind.manager >> "$MODPATH/.aot_log" 2>&1; then
+            touch "$AOT_MARKER" 2>/dev/null
+            ui_print "- Compilación AOT del baseline profile: OK"
+        else
+            ui_print "- Compilación AOT falló acá (se reintenta tras el próximo arranque)"
+        fi
     else
         ui_print "- No se pudo actualizar la app (firma distinta a la instalada)."
         ui_print "  Desinstalá SD Bind una vez y volvé a flashear el módulo."
