@@ -1,0 +1,30 @@
+# Baseline profile hecho a mano (sin Macrobenchmark: no hay forma de correr un test
+# instrumentado real desde acá para medir qué se usa de verdad al arrancar). Google
+# recomienda esto como punto de partida legítimo cuando no se puede generar uno medido:
+# https://developer.android.com/topic/performance/baselineprofiles/manually-create-baseline-profiles
+#
+# Cada línea "L..." marca una clase entera para compilación anticipada (AOT) en vez de
+# quedar en modo intérprete/JIT hasta que el uso normal la caliente sola — que es
+# exactamente el síntoma reportado: la app va a tirones los primeros minutos tras reiniciar
+# y después anda bien. Una línea que no matchee ninguna clase real del DEX simplemente se
+# ignora al mezclar el profile (no rompe el build), así que no hay riesgo en listar de más.
+#
+# No hay entradas de Compose/Material3/coroutines/libsu/Haze acá a propósito: esos AAR ya
+# traen SU PROPIO baseline profile adentro (compilado por sus autores con benchmarks reales),
+# y con solo agregar la dependencia de profileinstaller, Android Gradle Plugin ya los fusiona
+# automáticamente en el profile final del APK. Intentar adivinar firmas de métodos internos
+# de esas librerías a mano no suma nada sobre eso y sí puede quedar desactualizado en cada
+# bump de versión — mejor dejarles ese trabajo a quienes sí pueden medirlo.
+#
+# Todas las clases propias de la app: MainActivity y su companion, TODOS los composables y
+# funciones de nivel superior de MainActivity.kt (todos caen en la misma clase sintética
+# MainActivityKt, Kotlin no las separa salvo que se pida explícitamente), y los objetos
+# RootOps/Updater/Lang y el tema (Theme.kt/Fonts.kt).
+Lcom/sdcardbind/manager/MainActivity;
+Lcom/sdcardbind/manager/MainActivity$Companion;
+Lcom/sdcardbind/manager/MainActivityKt;
+Lcom/sdcardbind/manager/RootOps;
+Lcom/sdcardbind/manager/Updater;
+Lcom/sdcardbind/manager/Lang;
+Lcom/sdcardbind/manager/ui/ThemeKt;
+Lcom/sdcardbind/manager/ui/FontsKt;
