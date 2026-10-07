@@ -304,6 +304,11 @@ fun BindApp() {
         if (rootOk != true) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             updates.onForeground()
+            // Con la app abierta, vuelve a buscar de vez en cuando (autoCheck limita la frecuencia).
+            while (true) {
+                delay(30 * 60 * 1000L)
+                updates.autoCheck()
+            }
         }
     }
 
@@ -436,7 +441,8 @@ fun BindApp() {
                         1 -> LogPane(log, onClear = { clearLogNow() }, onRefresh = { refresh() })
                         2 -> AboutPane(
                             updates = updates,
-                            onUpdateApp = { scope.launch { updates.updateApp() } },
+                            onInstallUpdate = { scope.launch { updates.installReady() } },
+                            onRefresh = { updates.refresh() },
                             onFlashModule = { scope.launch { updates.flashModule() } }
                         )
                         else -> HomePane(
@@ -652,17 +658,28 @@ private fun NoRoot() {
 /** Contenedor "deslizar para refrescar": ejecuta [onRefresh] y mantiene el indicador un instante. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PullRefresh(onRefresh: () -> Unit, content: @Composable () -> Unit) {
+private fun PullRefresh(onRefresh: () -> Unit, content: @Composable () -> Unit) =
+    PullRefreshAwait(onRefresh = { onRefresh() }, minMillis = 1200, content = content)
+
+/** Como [PullRefresh] pero espera a que termine [onRefresh] (indicador visible al menos [minMillis]). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PullRefreshAwait(onRefresh: suspend () -> Unit, minMillis: Long = 600, content: @Composable () -> Unit) {
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
-            scope.launch {
+            if (!refreshing) scope.launch {
                 refreshing = true
-                onRefresh()
-                delay(1200)
-                refreshing = false
+                try {
+                    val t0 = System.currentTimeMillis()
+                    onRefresh()
+                    val left = minMillis - (System.currentTimeMillis() - t0)
+                    if (left > 0) delay(left)
+                } finally {
+                    refreshing = false
+                }
             }
         },
         modifier = Modifier.fillMaxSize()
@@ -1025,7 +1042,8 @@ private fun AppLogo(modifier: Modifier = Modifier) {
 @Composable
 private fun AboutPane(
     updates: UpdateController,
-    onUpdateApp: () -> Unit,
+    onInstallUpdate: () -> Unit,
+    onRefresh: suspend () -> Unit,
     onFlashModule: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -1037,6 +1055,7 @@ private fun AboutPane(
         }.getOrNull() ?: "2.5.1"
     }
     val iconDp = (minOf(cfg.screenWidthDp, cfg.screenHeightDp) * 0.28f).coerceIn(88f, 132f).dp
+    PullRefreshAwait(onRefresh = onRefresh) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         UiHeader(stringResource(R.string.tab_settings))
         Column(Modifier.padding(horizontal = UiScreenPadding)) {
@@ -1049,7 +1068,7 @@ private fun AboutPane(
                 }
             }
             Spacer(Modifier.height(16.dp))
-            UpdatesCard(updates, onUpdateApp = onUpdateApp, onFlashModule = onFlashModule)
+            UpdatesCard(updates, onInstallUpdate = onInstallUpdate, onFlashModule = onFlashModule)
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 AboutMiniCard(
@@ -1082,6 +1101,7 @@ private fun AboutPane(
             }
         }
         Spacer(Modifier.height(UiNavClearance))
+    }
     }
 }
 

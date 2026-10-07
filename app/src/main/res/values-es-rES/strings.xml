@@ -68,7 +68,7 @@
     <string name="version_fmt">versión %1$s</string>
     <string name="tools">Herramientas</string>
     <string name="updates">Actualizaciones</string>
-    <string name="updates_desc">Pulsa el botón para actualizar la aplicación a la última versión, incluidas las pre-releases. Si el módulo no coincide con la aplicación, aquí podrás descargarlo y flashearlo.</string>
+    <string name="updates_desc">La aplicación busca actualizaciones sola. Si no ves ninguna, desliza hacia abajo para buscar ahora. Si el módulo no coincide con la aplicación, aquí podrás descargarlo y flashearlo.</string>
     <string name="search">Buscar</string>
     <string name="card_binds">Vínculos</string>
     <string name="card_binds_desc">Monta carpetas de SD u OTG dentro del interno</string>
@@ -113,11 +113,12 @@
     <string name="tag_unmount">DESMONTAJE</string>
     <string name="tag_watch">VIGILANCIA</string>
     <string name="tag_system">SISTEMA</string>
-    <string name="upd_btn_update_app">Actualizar aplicación</string>
+    <string name="upd_btn_install">Instalar actualización</string>
     <string name="upd_btn_flash_module">Descargar y flashear módulo</string>
     <string name="upd_app_line">Aplicación: %1$s</string>
     <string name="upd_module_line">Módulo: %1$s</string>
     <string name="upd_module_none">Módulo: no instalado</string>
+    <string name="upd_ready">Actualización %1$s lista para instalar</string>
     <string name="upd_downloading">Descargando %1$s…</string>
     <string name="upd_installing">Instalando %1$s… la aplicación se reiniciará sola</string>
     <string name="upd_done">Aplicación actualizada a %1$s</string>

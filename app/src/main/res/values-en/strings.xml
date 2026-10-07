@@ -68,7 +68,7 @@
     <string name="version_fmt">version %1$s</string>
     <string name="tools">Tools</string>
     <string name="updates">Updates</string>
-    <string name="updates_desc">Tap the button to update the app to the latest version, including pre-releases. If the module doesn’t match the app, you can download and flash it from here.</string>
+    <string name="updates_desc">The app checks for updates on its own. If you don’t see one, pull down to check now. If the module doesn’t match the app, you can download and flash it from here.</string>
     <string name="search">Search</string>
     <string name="card_binds">Binds</string>
     <string name="card_binds_desc">Mount SD or OTG folders inside internal storage</string>
@@ -113,11 +113,12 @@
     <string name="tag_unmount">UNMOUNT</string>
     <string name="tag_watch">WATCH</string>
     <string name="tag_system">SYSTEM</string>
-    <string name="upd_btn_update_app">Update app</string>
+    <string name="upd_btn_install">Install update</string>
     <string name="upd_btn_flash_module">Download and flash module</string>
     <string name="upd_app_line">App: %1$s</string>
     <string name="upd_module_line">Module: %1$s</string>
     <string name="upd_module_none">Module: not installed</string>
+    <string name="upd_ready">Update %1$s is ready to install</string>
     <string name="upd_downloading">Downloading %1$s…</string>
     <string name="upd_installing">Installing %1$s… the app will restart by itself</string>
     <string name="upd_done">App updated to %1$s</string>

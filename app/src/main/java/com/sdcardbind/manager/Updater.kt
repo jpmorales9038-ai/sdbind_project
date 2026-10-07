@@ -226,6 +226,10 @@ object Updater {
 
     // ---------------------------------------------------------------- descarga + instalación de la app
 
+    /** APK ya descargado en una sesión anterior (para no bajarlo de nuevo), o null si no hay. */
+    fun cachedApk(context: Context): File? =
+        File(context.cacheDir, APK_NAME).takeIf { it.isFile && it.length() >= 100_000 }
+
     /** Descarga el APK de la release (asset .apk; si no existe, lo extrae del zip del módulo). */
     suspend fun downloadApp(context: Context, rel: ReleaseInfo): File? = withContext(Dispatchers.IO) {
         val dest = File(context.cacheDir, APK_NAME)
