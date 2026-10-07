@@ -1,75 +1,81 @@
-# Handoff — Réplica de la UI de Dolby Atmos en SD Bind
+# Handoff — Estilo visual de SD Bind
 
 > Para el siguiente chat. Léelo completo antes de tocar código.
-> Ruta del proyecto en el teléfono: `/storage/emulated/0/Download/sdbind_project/` · Rama de trabajo: **`preview`**
-> (el workflow `.github/workflows/build.yml` ya compila en push a `main` y `preview`; en `preview` publica un pre-release).
+> Proyecto en el teléfono: `/storage/emulated/0/Download/sdbind_project/` · Rama de trabajo: **`preview`**
+> (el workflow `.github/workflows/build.yml` compila en push a `main` y `preview`; en `preview` publica un pre-release).
 
 ## 1. Qué se pidió
-Replicar "tal cual" la interfaz de la app **Dolby Atmos** (capturas en `docs/reference/`) dentro de SD Bind,
-manteniendo toda la funcionalidad existente (vínculos, root, explorador, actualizador).
+Aplicar a SD Bind el **estilo** (no un clon) de una app de ajustes de audio tomada como referencia
+(capturas en `docs/reference/`): título grande con acciones, cards muy redondeadas con icono + título,
+interruptor principal y barra de navegación flotante en píldora. La app **no debe copiar** la interfaz
+ni llevar nombres/branding de esa app: es SD Bind con otro estilo. La funcionalidad existente no cambia.
 
-Referencias: `docs/reference/dolby_inicio.png` (Inicio) y `docs/reference/dolby_ecualizador.png` (Ecualizador).
-**No se tiene captura de la 3ª pestaña (ajustes) de Dolby**: "Ajustes" se resolvió por inferencia con el mismo lenguaje visual.
+Decisiones del usuario (ya aplicadas):
+- Sin gráficos decorativos tipo "barras ecualizadoras".
+- Fuentes redondeadas y **negrita en títulos**.
+- La barra de estado debe cambiar de color con el tema claro/oscuro.
 
-## 2. Lenguaje visual extraído (1080 px ≈ 392 dp)
-| Elemento | Medida / regla |
+## 2. Reglas de estilo (1080 px ≈ 392 dp)
+| Elemento | Regla |
 |---|---|
 | Margen lateral | 16 dp |
-| Título de pantalla | 36 sp, SemiBold, alineado a la izquierda; acciones = iconos sin fondo a la derecha (botones de 48 dp) |
-| Cards | radio 36 dp, padding 20 dp, color `surfaceContainerHigh`, separación 16 dp |
-| Cabecera de card | icono 26 dp en `primary` + título 22 sp Medium |
-| Hero (Inicio) | banner de 120 dp con degradado diagonal `secondaryContainer → lerp(tertiaryContainer, tertiary, .5)` + glifo de 11 barras (`primary`); debajo fila con título 24 sp SemiBold, estado 16 sp y `Switch` con ✕/✓ en el pulgar |
-| Campos/tiles dentro de cards | `surfaceContainerHighest` (en el kit: `dolbyInnerColor()`) |
-| Barra de navegación | píldora flotante `secondaryContainer`, padding 8 dp, items de 56 dp; el activo = píldora `primary` con icono + etiqueta 20 sp, los demás solo icono. Superpuesta al contenido, 16 dp sobre la barra de gestos |
-| Colores | todos del `ColorScheme` dinámico (Material You). Nada hardcodeado |
+| Título de pantalla | 36 sp **Bold**, a la izquierda; acciones = iconos sin fondo a la derecha |
+| Cards | radio 36 dp, padding 20 dp, `surfaceContainerHigh`, separación 16 dp |
+| Cabecera de card | icono 26 dp (`primary`) + título 22 sp **Bold** |
+| Card principal | degradado `secondaryContainer → tertiaryContainer`, título 26 sp Bold, estado y `Switch` con ✕/✓ |
+| Tiles dentro de cards | `uiInnerColor()` = `surfaceContainerHighest` |
+| Barra de navegación | píldora flotante `secondaryContainer`; pestaña activa = píldora `primary` con icono + etiqueta; el resto solo icono; superpuesta al contenido |
+| Colores | todos del `ColorScheme` dinámico, nada fijo |
 
-## 3. Qué se hizo (archivos)
-- **NUEVO** `app/src/main/java/com/sdcardbind/manager/ui/DolbyKit.kt` — kit reutilizable:
-  `DolbyHeader`, `DolbyCard`, `dolbyInnerColor()`, `BarsGlyph`, `DolbyHeroCard`, `DolbyNavBar`/`DolbyNavItem`,
-  constantes `DolbyScreenPadding` y `DolbyNavClearance` (120 dp de aire inferior para la barra flotante).
+## 3. Implementación
+- `ui/UiKit.kt` (kit): `UiHeader`, `UiCard`, `uiInnerColor()`, `UiHeroCard`, `UiNavBar`/`UiNavItem`,
+  constantes `UiScreenPadding` y `UiNavClearance` (120 dp de aire inferior por la barra flotante).
 - `MainActivity.kt`:
-  - Scaffold sin `bottomBar` ni FAB; la barra (`AppNavBar` → `DolbyNavBar`) se dibuja en el `Box` raíz, alineada abajo.
-  - **Inicio** (`HomePane`): header "SD Bind" con acciones ⓘ (va a Ajustes) y ⟳ (refresca almacenamiento);
-    `DolbyHeroCard` "Usar vínculos" Activado/Desactivado; card Almacenamiento (anillos; long-press sigue refrescando);
-    card Vínculos (lista + botón "Añadir vínculo", que sustituye al FAB).
-  - **Interruptor del hero**: ON = `RootOps.saveAndApply(entries)` (lo que hacía "Montar todo"); OFF = `unmountAllNow()`.
-    Estado mostrado = `entries.any { status == "MOUNTED" }`. Si no hay SD/OTG o no hay vínculos, muestra snackbar en vez de actuar.
-    Se eliminaron `ActionButtons`, `StorageHero` y `HomeHeader` (sus funciones quedaron absorbidas).
-  - **Registro** (`LogPane`): header con acciones Compartir y Borrar (el FAB de borrar desapareció).
-  - **Ajustes** (antes "Acerca de", `AboutPane`): mismas cards Dolby (Acerca de, Actualizaciones, 4 mini-cards).
-  - `BindCard` ahora usa `dolbyInnerColor()` para destacar dentro de su card.
-- `res/values*/strings.xml` (es, es-rES, en): nuevas `tab_settings`, `use_binds`, `state_on`, `state_off`.
-- Sin cambios: `RootOps`, `Updater`, `Theme`, selector de carpetas y explorador (pantallas completas con `TopAppBar`, fuera del alcance de las capturas).
+  - Scaffold sin `bottomBar` ni FAB; la barra (`AppNavBar` → `UiNavBar`) va en el `Box` raíz.
+  - **Inicio** (`HomePane`): header "SD Bind" con ⓘ (va a Ajustes) y ⟳ (refresca); `UiHeroCard` "Usar vínculos";
+    card Almacenamiento (long-press sigue refrescando); card Vínculos con lista y botón "Añadir vínculo" (reemplaza al FAB).
+  - **Interruptor**: ON = `RootOps.saveAndApply(entries)`; OFF = `unmountAllNow()`. Estado = `entries.any { status == "MOUNTED" }`.
+    Sin SD/OTG o sin vínculos muestra snackbar en vez de actuar.
+  - **Registro**: header con Compartir y Borrar. **Ajustes** (antes "Acerca de"): mismas cards.
+- `ui/Theme.kt`: `SideEffect` que fija `isAppearanceLightStatusBars/NavigationBars = !dark` con el tema **actual**
+  (la Activity maneja `uiMode` sin recrearse, y `enableEdgeToEdge()` solo decide al crearla → iconos con el color viejo).
+- `ui/Fonts.kt`: la familia ahora se arma con **pesos reales** (400–800). Antes se envolvía un solo `Typeface` y Compose
+  ignoraba el peso, por eso la negrita no se veía. Busca Google Sans Rounded/Flex en `/system/fonts`; si no hay, prueba
+  familias del sistema por nombre.
+- Strings nuevas en los 3 idiomas: `tab_settings`, `use_binds`, `state_on`, `state_off`.
+- Sin cambios: `RootOps`, `Updater`, selector de carpetas y explorador.
 
 ## 4. Estado / verificación
-- 🔧 Primer CI en `preview` falló solo por un import faltante (`androidx.compose.runtime.getValue` en `DolbyKit.kt`); ya corregido, pendiente de confirmar el siguiente build.
-- ⚠️ **No se pudo compilar** en el entorno del chat (sin red / sin Gradle). El código se revisó a mano. Primer paso del siguiente chat:
-  mirar el resultado del workflow de GitHub Actions en `preview` y corregir errores de compilación si los hay.
-  Puntos con más riesgo de API (Compose Material3 `1.5.0-alpha18`): `Switch(thumbContent = …)`, `Button(shapes = …, colors = …)`, `Icons.Filled.Notes` (deprecado pero ya se usaba).
-- Pendiente de validar en dispositivo: que el degradado/colores se vean como la captura con el wallpaper del usuario; que la barra flotante no tape el último elemento en pantallas pequeñas y en horizontal.
-- Warnings esperados: imports/variables sin uso (`fabSpec`, `scaleIn`, `PagerState`, strings `save_mount`, `root_ok`, `tab_about_short`…). Limpiarlos es opcional.
+- El primer CI falló por un import faltante (`getValue` en el kit); corregido. El código de esta versión **no se pudo compilar
+  en el chat** (sin red): revisar el resultado de Actions en `preview`.
+- Riesgo de API en esta versión: `Font(file, weight, variationSettings)`, `Font(DeviceFontFamilyName(..), weight)` y
+  `@file:OptIn(ExperimentalTextApi)` en `Fonts.kt`; `Switch(thumbContent)`; `Button(shapes, colors)`.
+- **Limitación de fuentes**: si el teléfono no trae una fuente redondeada en `/system/fonts`, no hay forma de "redondear"
+  solo con código. Solución definitiva: meter un `.ttf` redondeado (p. ej. Nunito) en `app/src/main/res/font/` y usarlo
+  como familia base. No se pudo bundlear en el chat por no haber red.
+- Pendiente de validar en el teléfono: barra de estado al cambiar claro/oscuro con la app abierta; negrita en títulos;
+  que la barra flotante no tape el último elemento en pantallas pequeñas/horizontal.
 
 ## 5. Siguientes pasos sugeridos
-1. Confirmar que compila (CI) y subir a `preview`.
-2. Comparar contra las capturas y afinar medidas (glifo, alturas, tamaños de texto).
-3. Si el usuario manda la captura de la 3ª pestaña de Dolby, rehacer `AboutPane` calcándola.
-4. Opcional: adoptar el estilo Dolby en `FolderPickerScreen` y `FileBrowserScreen` (header grande + cards) y en los diálogos.
-5. Opcional: animar el glifo de barras cuando los vínculos estén activos.
-6. Si se cambia algo funcional, subir `versionCode`/`versionName` en `app/build.gradle.kts` **y** `module/module.prop` a la vez (el updater compara `module.prop`).
+1. Confirmar compilación (CI) y revisar en dispositivo.
+2. Si la fuente sigue sin verse redonda: bundlear un `.ttf` en `res/font/`.
+3. Opcional: mismo estilo en `FolderPickerScreen` / `FileBrowserScreen` y diálogos.
+4. Si se cambia algo funcional, subir versión en `app/build.gradle.kts` **y** `module/module.prop` a la vez (el updater compara `module.prop`).
 
-## 6. Reglas del proyecto a respetar
-- Mantener Material 3 Expressive y colores dinámicos; no introducir colores fijos (salvo el verde semáforo de `StatusChip`).
+## 6. Reglas del proyecto
+- Material 3 Expressive + colores dinámicos; sin colores fijos (salvo el verde semáforo de `StatusChip`).
 - No tocar la keystore ni `applicationId` (el `pm install -r` desde el módulo depende de la firma).
 - Textos siempre en `strings.xml` de **los tres** idiomas (`values`, `values-es-rES`, `values-en`).
-- No añadir lógica root nueva en composables: va en `RootOps.kt`.
+- Nada de lógica root nueva en composables: va en `RootOps.kt`.
+- No usar nombres, textos ni gráficos de la app de referencia dentro del código ni de la UI.
 
-## 7. Comandos Termux (entorno ya configurado: git, rama `preview`, credenciales)
-
+## 7. Comandos Termux (entorno ya configurado)
 El zip no trae carpeta raíz, por eso `-d sdbind_project`. Se extrae encima y conserva `.git`.
 
 ```bash
 cd /storage/emulated/0/Download && unzip -o sdbind_project.zip -d sdbind_project
-cd sdbind_project && git add -A && git commit -m "feat(ui): réplica de la interfaz de Dolby Atmos" && git push origin preview
+cd sdbind_project && git add -A && git commit -m "feat(ui): estilo de cards, fuentes en negrita y barra de estado" && git push origin preview
 ```
 
-`unzip` no borra archivos que ya no existan; si un cambio elimina alguno, bórralo a mano antes del commit.
+`unzip` no borra archivos que ya no existan: si un cambio elimina alguno (p. ej. al renombrar), bórralo a mano antes del commit.
+Esta versión renombró `ui/DolbyKit.kt` → `ui/UiKit.kt`: **borra el viejo** con `rm app/src/main/java/com/sdcardbind/manager/ui/DolbyKit.kt` y `rm docs/reference/dolby_*.png`.

@@ -48,21 +48,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /*
- * Kit visual "estilo Dolby Atmos": réplica de la app Dolby de Pixel/AOSP.
- * Medidas tomadas de las capturas de referencia (1080 px de ancho ≈ 392 dp).
- * Los colores salen todos del ColorScheme (Material You), nada fijo.
+ * Kit visual de la app: título grande + cards redondeadas + barra de navegación flotante.
+ * Todos los colores salen del ColorScheme (Material You), nada fijo.
  */
 
 /** Margen lateral de pantalla y radio de las cards, igual que la referencia. */
-val DolbyScreenPadding = 16.dp
-private val DolbyCardRadius = 36.dp
+val UiScreenPadding = 16.dp
+private val UiCardRadius = 36.dp
 
 /** Espacio inferior que hay que dejar en listas para que la barra flotante no tape contenido. */
-val DolbyNavClearance = 120.dp
+val UiNavClearance = 120.dp
 
 /** Título grande a la izquierda + acciones (iconos sin fondo) a la derecha. */
 @Composable
-fun DolbyHeader(
+fun UiHeader(
     title: String,
     modifier: Modifier = Modifier,
     actions: @Composable RowScope.() -> Unit = {}
@@ -71,7 +70,7 @@ fun DolbyHeader(
     Row(
         modifier
             .fillMaxWidth()
-            .padding(start = DolbyScreenPadding + 1.dp, end = 8.dp, top = 16.dp, bottom = 12.dp),
+            .padding(start = UiScreenPadding + 1.dp, end = 8.dp, top = 16.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -79,7 +78,7 @@ fun DolbyHeader(
             color = cs.onBackground,
             fontSize = 36.sp,
             lineHeight = 44.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
@@ -90,7 +89,7 @@ fun DolbyHeader(
 
 /** Card de sección: icono (color primario) + título y contenido debajo. */
 @Composable
-fun DolbyCard(
+fun UiCard(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     title: String? = null,
@@ -100,7 +99,7 @@ fun DolbyCard(
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(DolbyCardRadius))
+            .clip(RoundedCornerShape(UiCardRadius))
             .background(cs.surfaceContainerHigh)
             .padding(20.dp)
             .animateContentSize()
@@ -115,7 +114,7 @@ fun DolbyCard(
                     title,
                     color = cs.onSurface,
                     fontSize = 22.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -126,38 +125,16 @@ fun DolbyCard(
     }
 }
 
-/** Color de las "píldoras" interiores de una [DolbyCard] (campos, tiles, filas). */
+/** Color de las "píldoras" interiores de una [UiCard] (campos, tiles, filas). */
 @Composable
-fun dolbyInnerColor(): Color = MaterialTheme.colorScheme.surfaceContainerHighest
-
-/** Glifo de barras ecualizadoras de la card principal (anchos × altos en dp, alineadas abajo). */
-@Composable
-fun BarsGlyph(color: Color, modifier: Modifier = Modifier) {
-    val widths = listOf(6.5f, 7.5f, 9.5f, 11f, 12f, 12.5f, 12.5f, 10.5f, 10f, 7.5f, 5.5f)
-    val heights = listOf(18f, 17f, 14f, 13f, 21f, 20f, 28f, 34f, 35f, 30f, 20f)
-    Row(
-        modifier,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.Bottom
-    ) {
-        widths.indices.forEach { i ->
-            Box(
-                Modifier
-                    .width(widths[i].dp)
-                    .height(heights[i].dp)
-                    .clip(CircleShape)
-                    .background(color)
-            )
-        }
-    }
-}
+fun uiInnerColor(): Color = MaterialTheme.colorScheme.surfaceContainerHighest
 
 /**
- * Card principal de Inicio: banner con degradado + glifo y, debajo, título/estado con el
- * interruptor (con X / ✓ dentro del pulgar, como en la referencia).
+ * Card principal de Inicio: fondo en degradado suave con título, estado e interruptor
+ * (con ✕ / ✓ dentro del pulgar).
  */
 @Composable
-fun DolbyHeroCard(
+fun UiHeroCard(
     title: String,
     subtitle: String,
     checked: Boolean,
@@ -166,66 +143,57 @@ fun DolbyHeroCard(
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
-    val gradient = Brush.linearGradient(
-        listOf(cs.secondaryContainer, lerp(cs.tertiaryContainer, cs.tertiary, 0.5f))
-    )
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(DolbyCardRadius))) {
-        Box(
-            Modifier.fillMaxWidth().height(120.dp).background(gradient),
-            contentAlignment = Alignment.Center
-        ) {
-            BarsGlyph(color = cs.primary)
-        }
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(cs.surfaceContainerHigh)
-                .toggleable(
-                    value = checked,
-                    enabled = enabled,
-                    role = Role.Switch,
-                    onValueChange = onCheckedChange
-                )
-                .padding(horizontal = 20.dp, vertical = 22.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    color = cs.onSurface,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(subtitle, color = cs.onSurfaceVariant, fontSize = 16.sp)
-            }
-            Spacer(Modifier.width(12.dp))
-            Switch(
-                checked = checked,
-                onCheckedChange = null,
+    val gradient = Brush.linearGradient(listOf(cs.secondaryContainer, cs.tertiaryContainer))
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(UiCardRadius))
+            .background(gradient)
+            .toggleable(
+                value = checked,
                 enabled = enabled,
-                thumbContent = {
-                    Icon(
-                        if (checked) Icons.Filled.Check else Icons.Filled.Close,
-                        contentDescription = null,
-                        modifier = Modifier.size(SwitchDefaults.IconSize)
-                    )
-                }
+                role = Role.Switch,
+                onValueChange = onCheckedChange
             )
+            .padding(horizontal = 24.dp, vertical = 28.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                color = cs.onSecondaryContainer,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(subtitle, color = cs.onSecondaryContainer.copy(alpha = 0.75f), fontSize = 16.sp)
         }
+        Spacer(Modifier.width(12.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = null,
+            enabled = enabled,
+            thumbContent = {
+                Icon(
+                    if (checked) Icons.Filled.Check else Icons.Filled.Close,
+                    contentDescription = null,
+                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                )
+            }
+        )
     }
 }
 
-data class DolbyNavItem(val label: String, val icon: ImageVector)
+data class UiNavItem(val label: String, val icon: ImageVector)
 
 /**
  * Barra de navegación flotante en píldora: la pestaña activa se resalta con su etiqueta, las
  * demás muestran solo el icono. Va superpuesta al contenido (no reserva espacio).
  */
 @Composable
-fun DolbyNavBar(
-    items: List<DolbyNavItem>,
+fun UiNavBar(
+    items: List<UiNavItem>,
     selected: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier

@@ -1,10 +1,16 @@
+@file:OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+
 package com.sdcardbind.manager.ui
 
 import android.graphics.Typeface
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.DeviceFontFamilyName
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontWeight
 import java.io.File
 
 private val FONT_PATHS = listOf(
@@ -21,24 +27,41 @@ private val FONT_PATHS = listOf(
 
 private val FONT_NAMES = listOf(
     "google-sans-rounded",
+    "variable-rounded",
+    "sans-serif-rounded",
     "google-sans-flex",
     "google-sans-text",
-    "google-sans",
-    "sans-serif-rounded"
+    "google-sans"
 )
 
+/**
+ * Familia con pesos reales (400–800). Antes se envolvía un único Typeface con FontFamily(tf) y
+ * Compose ignora el peso en ese caso: todo salía en regular y la negrita no se aplicaba.
+ */
 fun loadAppFontFamily(): FontFamily {
     findFontFile()?.let { file ->
-        try { return FontFamily(Typeface.createFromFile(file)) } catch (_: Exception) {}
+        try {
+            return FontFamily(WEIGHTS.map { w ->
+                Font(
+                    file = file,
+                    weight = w,
+                    variationSettings = FontVariation.Settings(FontVariation.weight(w.weight))
+                )
+            })
+        } catch (_: Exception) {}
     }
     for (name in FONT_NAMES) {
         try {
             val tf = Typeface.create(name, Typeface.NORMAL)
-            if (tf != null && tf !== Typeface.DEFAULT) return FontFamily(tf)
+            if (tf != null && tf !== Typeface.DEFAULT) {
+                return FontFamily(WEIGHTS.map { w -> Font(DeviceFontFamilyName(name), w) })
+            }
         } catch (_: Exception) {}
     }
     return FontFamily.SansSerif
 }
+
+private val WEIGHTS = listOf(FontWeight.W400, FontWeight.W500, FontWeight.W600, FontWeight.W700, FontWeight.W800)
 
 private fun findFontFile(): File? {
     FONT_PATHS.forEach { p -> File(p).takeIf { it.isFile }?.let { return it } }

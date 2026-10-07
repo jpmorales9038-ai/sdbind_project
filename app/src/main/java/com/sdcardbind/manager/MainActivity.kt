@@ -87,14 +87,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.sdcardbind.manager.ui.AppTheme
-import com.sdcardbind.manager.ui.DolbyCard
-import com.sdcardbind.manager.ui.DolbyHeader
-import com.sdcardbind.manager.ui.DolbyHeroCard
-import com.sdcardbind.manager.ui.DolbyNavBar
-import com.sdcardbind.manager.ui.DolbyNavItem
-import com.sdcardbind.manager.ui.DolbyNavClearance
-import com.sdcardbind.manager.ui.DolbyScreenPadding
-import com.sdcardbind.manager.ui.dolbyInnerColor
+import com.sdcardbind.manager.ui.UiCard
+import com.sdcardbind.manager.ui.UiHeader
+import com.sdcardbind.manager.ui.UiHeroCard
+import com.sdcardbind.manager.ui.UiNavBar
+import com.sdcardbind.manager.ui.UiNavItem
+import com.sdcardbind.manager.ui.UiNavClearance
+import com.sdcardbind.manager.ui.UiScreenPadding
+import com.sdcardbind.manager.ui.uiInnerColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -479,7 +479,7 @@ fun BindApp() {
         }
         }
     }
-    // Barra flotante estilo Dolby: superpuesta al contenido, centrada abajo.
+    // Barra flotante flotante: superpuesta al contenido, centrada abajo.
     AnimatedVisibility(
         visible = showChrome,
         modifier = Modifier.align(Alignment.BottomCenter),
@@ -612,15 +612,15 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
     }
 }
 
-/** Barra de navegación flotante estilo Dolby (ver ui/DolbyKit.kt). */
+/** Barra de navegación flotante (ver ui/UiKit.kt). */
 @Composable
 private fun AppNavBar(selected: Int, onTab: (Tab) -> Unit, modifier: Modifier = Modifier) {
     val items = listOf(
-        DolbyNavItem(stringResource(R.string.tab_home), Icons.Filled.Home),
-        DolbyNavItem(stringResource(R.string.tab_log), Icons.Filled.Notes),
-        DolbyNavItem(stringResource(R.string.tab_settings), Icons.Filled.Settings)
+        UiNavItem(stringResource(R.string.tab_home), Icons.Filled.Home),
+        UiNavItem(stringResource(R.string.tab_log), Icons.Filled.Notes),
+        UiNavItem(stringResource(R.string.tab_settings), Icons.Filled.Settings)
     )
-    DolbyNavBar(items = items, selected = selected, onSelect = { onTab(Tab.entries[it]) }, modifier = modifier)
+    UiNavBar(items = items, selected = selected, onSelect = { onTab(Tab.entries[it]) }, modifier = modifier)
 }
 
 @Composable
@@ -656,13 +656,13 @@ private fun HomePane(
     val active = entries.any { it.status == "MOUNTED" }
     val hasExternal = volumes.any { it.kind == VolumeKind.EXTERNAL }
     val header: @Composable () -> Unit = {
-        DolbyHeader("SD Bind") {
+        UiHeader("SD Bind") {
             IconButton(onClick = onInfo) { Icon(Icons.Filled.Info, contentDescription = stringResource(R.string.about)) }
             IconButton(onClick = onRefreshStorage) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.storage_updated)) }
         }
     }
     val hero: @Composable () -> Unit = {
-        DolbyHeroCard(
+        UiHeroCard(
             title = stringResource(R.string.use_binds),
             subtitle = stringResource(if (active) R.string.state_on else R.string.state_off),
             checked = active,
@@ -674,14 +674,14 @@ private fun HomePane(
         StorageCard(volumes, playToken, onRefreshStorage)
     }
     val binds: @Composable () -> Unit = {
-        DolbyCard(icon = Icons.Filled.Link, title = stringResource(R.string.binds)) {
+        UiCard(icon = Icons.Filled.Link, title = stringResource(R.string.binds)) {
             BindList(entries, onDelete, onOpen)
             Spacer(Modifier.height(12.dp))
             AddBindButton(hasExternal, onAdd)
         }
     }
     if (landscape) {
-        Row(Modifier.fillMaxSize().padding(horizontal = DolbyScreenPadding)) {
+        Row(Modifier.fillMaxSize().padding(horizontal = UiScreenPadding)) {
             Column(
                 Modifier.weight(0.42f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(end = 8.dp)
             ) {
@@ -689,26 +689,26 @@ private fun HomePane(
                 hero()
                 Spacer(Modifier.height(16.dp))
                 storage()
-                Spacer(Modifier.height(DolbyNavClearance))
+                Spacer(Modifier.height(UiNavClearance))
             }
             Column(
                 Modifier.weight(0.58f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 8.dp, top = 16.dp)
             ) {
                 binds()
-                Spacer(Modifier.height(DolbyNavClearance))
+                Spacer(Modifier.height(UiNavClearance))
             }
         }
     } else {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             header()
-            Column(Modifier.padding(horizontal = DolbyScreenPadding)) {
+            Column(Modifier.padding(horizontal = UiScreenPadding)) {
                 hero()
                 Spacer(Modifier.height(16.dp))
                 storage()
                 Spacer(Modifier.height(16.dp))
                 binds()
             }
-            Spacer(Modifier.height(DolbyNavClearance))
+            Spacer(Modifier.height(UiNavClearance))
         }
     }
 }
@@ -722,7 +722,7 @@ private fun BindList(
     val cs = MaterialTheme.colorScheme
     if (entries.isEmpty()) {
         Box(
-            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(dolbyInnerColor()).padding(24.dp),
+            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(uiInnerColor()).padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -750,7 +750,7 @@ private fun AddBindButton(hasExternal: Boolean, onAdd: () -> Unit) {
         shapes = ButtonDefaults.shapes(),
         colors = if (hasExternal) ButtonDefaults.buttonColors()
         else ButtonDefaults.buttonColors(
-            containerColor = dolbyInnerColor(),
+            containerColor = uiInnerColor(),
             contentColor = cs.onSurfaceVariant.copy(alpha = 0.6f)
         )
     ) {
@@ -763,7 +763,7 @@ private fun AddBindButton(hasExternal: Boolean, onAdd: () -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StorageCard(volumes: List<StorageVolume>, playToken: Int, onRefresh: () -> Unit) {
-    DolbyCard(
+    UiCard(
         modifier = Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { onRefresh() }) },
         icon = Icons.Filled.Storage,
         title = stringResource(R.string.storage)
@@ -920,7 +920,7 @@ private fun BindCard(entry: MountEntry, onDelete: () -> Unit, onOpen: () -> Unit
         Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
-            .background(dolbyInnerColor())
+            .background(uiInnerColor())
             .padding(14.dp)
             .animateContentSize(sizeSpec()),
         verticalAlignment = Alignment.CenterVertically
@@ -1071,9 +1071,9 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
     }
     val iconDp = (minOf(cfg.screenWidthDp, cfg.screenHeightDp) * 0.32f).coerceIn(104f, 176f).dp
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        DolbyHeader(stringResource(R.string.tab_settings))
-        Column(Modifier.padding(horizontal = DolbyScreenPadding)) {
-            DolbyCard(icon = Icons.Filled.Info, title = stringResource(R.string.about)) {
+        UiHeader(stringResource(R.string.tab_settings))
+        Column(Modifier.padding(horizontal = UiScreenPadding)) {
+            UiCard(icon = Icons.Filled.Info, title = stringResource(R.string.about)) {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     AppMark(Modifier.size(iconDp))
                     Spacer(Modifier.height(16.dp))
@@ -1082,7 +1082,7 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(16.dp))
-            DolbyCard(icon = Icons.Filled.SystemUpdate, title = stringResource(R.string.updates)) {
+            UiCard(icon = Icons.Filled.SystemUpdate, title = stringResource(R.string.updates)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         stringResource(R.string.updates_desc),
@@ -1135,7 +1135,7 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
                 )
             }
         }
-        Spacer(Modifier.height(DolbyNavClearance))
+        Spacer(Modifier.height(UiNavClearance))
     }
 }
 
@@ -1156,7 +1156,7 @@ private fun AboutMiniCard(modifier: Modifier, icon: ImageVector, title: String, 
             Icon(icon, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(12.dp))
-        Text(title, color = cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(title, color = cs.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(4.dp))
         Text(body, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
     }
@@ -1168,7 +1168,7 @@ private fun LogPane(log: String, onClear: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize()) {
-        DolbyHeader(stringResource(R.string.log)) {
+        UiHeader(stringResource(R.string.log)) {
             IconButton(onClick = {
                 scope.launch {
                     val full = RootOps.fullLog()
@@ -1185,7 +1185,7 @@ private fun LogPane(log: String, onClear: () -> Unit) {
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(start = DolbyScreenPadding, end = DolbyScreenPadding, bottom = DolbyNavClearance)
+                .padding(start = UiScreenPadding, end = UiScreenPadding, bottom = UiNavClearance)
                 .clip(RoundedCornerShape(36.dp))
                 .background(cs.surfaceContainerHigh)
                 .padding(20.dp)

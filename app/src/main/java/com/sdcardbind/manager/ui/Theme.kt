@@ -1,5 +1,8 @@
 package com.sdcardbind.manager.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,9 +14,12 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.dp
 
 /**
@@ -53,6 +59,20 @@ fun AppTheme(content: @Composable () -> Unit) {
             extraLarge = RoundedCornerShape(36.dp)
         )
     }
+    // Iconos de la barra de estado/navegación según el tema ACTUAL. enableEdgeToEdge() solo los
+    // decide al crear la Activity y, como la Activity maneja uiMode sin recrearse, al cambiar
+    // entre claro/oscuro con la app abierta quedaban con el color viejo.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            view.context.findActivity()?.window?.let { w ->
+                WindowCompat.getInsetsController(w, view).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                }
+            }
+        }
+    }
     val typography = remember { roundedTypography(loadAppFontFamily()) }
 
     MaterialExpressiveTheme(
@@ -62,4 +82,10 @@ fun AppTheme(content: @Composable () -> Unit) {
         typography = typography,
         content = content
     )
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
