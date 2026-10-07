@@ -18,7 +18,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -298,6 +297,16 @@ fun BindApp() {
         }
     }
 
+    // Actualizaciones: estado de la tarjeta de Ajustes. Cada vez que la app vuelve a primer plano
+    // se compara la versión de la app con la del módulo (ámbar si no coinciden).
+    val updates = remember { UpdateController(context) }
+    LaunchedEffect(rootOk) {
+        if (rootOk != true) return@LaunchedEffect
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            updates.onForeground()
+        }
+    }
+
     DisposableEffect(rootOk) {
         if (rootOk != true) return@DisposableEffect onDispose { }
         val receiver = object : BroadcastReceiver() {
@@ -425,7 +434,11 @@ fun BindApp() {
                 ) { page ->
                     when (page) {
                         1 -> LogPane(log, onClear = { clearLogNow() }, onRefresh = { refresh() })
-                        2 -> AboutPane(onSnack = { snack = it })
+                        2 -> AboutPane(
+                            updates = updates,
+                            onUpdateApp = { scope.launch { updates.updateApp() } },
+                            onFlashModule = { scope.launch { updates.flashModule() } }
+                        )
                         else -> HomePane(
                             volumes = volumes,
                             entries = entries,
@@ -1010,7 +1023,11 @@ private fun AppLogo(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun AboutPane(onSnack: (String) -> Unit) {
+private fun AboutPane(
+    updates: UpdateController,
+    onUpdateApp: () -> Unit,
+    onFlashModule: () -> Unit
+) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val cfg = LocalConfiguration.current
@@ -1032,7 +1049,7 @@ private fun AboutPane(onSnack: (String) -> Unit) {
                 }
             }
             Spacer(Modifier.height(16.dp))
-            UpdatesCard(appVersion = ver ?: "0", onSnack = onSnack)
+            UpdatesCard(updates, onUpdateApp = onUpdateApp, onFlashModule = onFlashModule)
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 AboutMiniCard(
@@ -1065,146 +1082,6 @@ private fun AboutPane(onSnack: (String) -> Unit) {
             }
         }
         Spacer(Modifier.height(UiNavClearance))
-    }
-}
-
-private enum class UpdMode { NEUTRAL, APP_OK, MODULE_MISMATCH }
-
-/**
- * Tarjeta de actualizaciones. Gestiona la APP (no el módulo):
- *  - Neutra: botón que busca y se instala sola (APK vía root).
- *  - Verde: la app está al día / se está actualizando.
- *  - Ámbar: al (re)abrir la app, la versión del módulo instalado no coincide con la de la app;
- *    el botón descarga el zip del módulo y lo abre para flashearlo.
- * Verde/ámbar son colores fijos tipo semáforo (como el verde de `StatusChip`).
- */
-@Composable
-private fun UpdatesCard(appVersion: String, onSnack: (String) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var working by remember { mutableStateOf(false) }
-    var workLabel by remember { mutableStateOf<String?>(null) }
-    var appOk by remember { mutableStateOf(false) }
-    var appOkText by remember { mutableStateOf<String?>(null) }
-    var modVer by remember { mutableStateOf<String?>(null) }
-
-    // Cada vez que la app se abre / vuelve a primer plano se relee la versión del módulo.
-    LaunchedEffect(Unit) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            modVer = Updater.moduleVersion()
-        }
-    }
-
-    val mismatch = modVer?.let { !Updater.sameVersion(appVersion, it) } ?: false
-    val mode = when {
-        mismatch -> UpdMode.MODULE_MISMATCH
-        appOk -> UpdMode.APP_OK
-        else -> UpdMode.NEUTRAL
-    }
-
-    val green = Color(0xFF2E7D32)
-    val onGreen = Color.White
-    val amber = Color(0xFFFFB74D)
-    val onAmber = Color(0xFF3E2700)
-    val bg by animateColorAsState(
-        when (mode) {
-            UpdMode.NEUTRAL -> cs.surfaceContainerHigh
-            UpdMode.APP_OK -> green
-            UpdMode.MODULE_MISMATCH -> amber
-        },
-        label = "updBg"
-    )
-    val fg = when (mode) {
-        UpdMode.NEUTRAL -> cs.onSurface
-        UpdMode.APP_OK -> onGreen
-        UpdMode.MODULE_MISMATCH -> onAmber
-    }
-    val sub = if (mode == UpdMode.NEUTRAL) cs.onSurfaceVariant else fg.copy(alpha = 0.85f)
-    val icon = when (mode) {
-        UpdMode.NEUTRAL -> Icons.Filled.SystemUpdate
-        UpdMode.APP_OK -> Icons.Filled.CheckCircle
-        UpdMode.MODULE_MISMATCH -> Icons.Filled.Warning
-    }
-    val text = workLabel ?: when (mode) {
-        UpdMode.NEUTRAL -> stringResource(R.string.updates_desc)
-        UpdMode.APP_OK -> appOkText ?: stringResource(R.string.update_app_ok, appVersion)
-        UpdMode.MODULE_MISMATCH -> stringResource(R.string.update_module_mismatch, appVersion, modVer ?: "?")
-    }
-
-    val updateApp: () -> Unit = {
-        scope.launch {
-            working = true
-            workLabel = context.getString(R.string.update_app_working)
-            when (val out = Updater.updateApp(context, appVersion) { tag ->
-                // El instalador root ya arrancó: la tarjeta pasa a verde y la app se reiniciará.
-                appOk = true
-                appOkText = context.getString(R.string.update_app_installing, tag)
-            }) {
-                is AppUpdateOutcome.UpToDate -> {
-                    appOk = true
-                    appOkText = null
-                    onSnack(context.getString(R.string.update_up_to_date, out.version))
-                }
-                is AppUpdateOutcome.Installing -> Unit
-                is AppUpdateOutcome.Failed -> {
-                    appOk = false
-                    appOkText = null
-                    onSnack(context.getString(R.string.update_install_failed, out.message))
-                }
-            }
-            working = false
-            workLabel = null
-        }
-    }
-    val flashModule: () -> Unit = {
-        scope.launch {
-            working = true
-            workLabel = context.getString(R.string.update_module_downloading)
-            when (val out = Updater.downloadModule(context)) {
-                is UpdateOutcome.Info -> onSnack(out.message)
-                is UpdateOutcome.Ready -> {
-                    onSnack(context.getString(R.string.update_ready, out.tag))
-                    runCatching { Updater.openForFlash(context, out.zip) }
-                        .onFailure { onSnack(context.getString(R.string.update_saved_downloads)) }
-                }
-            }
-            working = false
-            workLabel = null
-        }
-    }
-
-    UiCard(
-        icon = icon,
-        title = stringResource(R.string.updates),
-        containerColor = bg,
-        contentColor = if (mode == UpdMode.NEUTRAL) Color.Unspecified else fg
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text, color = sub, fontSize = 13.sp, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(12.dp))
-            Button(
-                onClick = if (mode == UpdMode.MODULE_MISMATCH) flashModule else updateApp,
-                enabled = !working,
-                shapes = ButtonDefaults.shapes(),
-                colors = when (mode) {
-                    UpdMode.NEUTRAL -> ButtonDefaults.buttonColors()
-                    UpdMode.APP_OK -> ButtonDefaults.buttonColors(containerColor = onGreen, contentColor = green)
-                    UpdMode.MODULE_MISMATCH -> ButtonDefaults.buttonColors(containerColor = onAmber, contentColor = amber)
-                }
-            ) {
-                if (working) {
-                    LoadingIndicator(Modifier.size(24.dp), color = LocalContentColor.current)
-                } else {
-                    Text(
-                        stringResource(
-                            if (mode == UpdMode.MODULE_MISMATCH) R.string.update_flash_module else R.string.search
-                        )
-                    )
-                }
-            }
-        }
     }
 }
 

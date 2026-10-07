@@ -4,6 +4,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Sufijo de build que inyecta el CI en las pre-releases (p. ej. "-preview.57"); vacío en main y en
+// compilaciones locales. Va dentro de versionName para que la app sepa qué pre-release es.
+val buildSuffix: String = providers.gradleProperty("buildSuffix").getOrElse("")
+
 android {
     namespace = "com.sdcardbind.manager"
     compileSdk = 36
@@ -12,8 +16,8 @@ android {
         applicationId = "com.sdcardbind.manager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 106
-        versionName = "2.9.2"
+        versionCode = 107
+        versionName = "2.9.3$buildSuffix"
     }
 
     signingConfigs {

@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -90,37 +91,57 @@ fun UiHeader(
     }
 }
 
-/** Card de sección: icono (color primario) + título y contenido debajo. */
+/** Pareja fondo/contenido para tarjetas con significado (éxito, aviso). */
+class UiTone(val container: Color, val content: Color)
+
+/**
+ * Tono "éxito" (verde). No existe en el esquema dinámico, así que, igual que el semáforo de
+ * StatusChip, es un color semántico fijo con variante clara y oscura.
+ */
+@Composable
+fun uiSuccessTone(): UiTone {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    return if (dark) UiTone(Color(0xFF1F4D26), Color(0xFFC8E6C9)) else UiTone(Color(0xFFC8E6C9), Color(0xFF1B5E20))
+}
+
+/** Tono "aviso" (ámbar), mismas reglas que [uiSuccessTone]. */
+@Composable
+fun uiWarningTone(): UiTone {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    return if (dark) UiTone(Color(0xFF5C3D00), Color(0xFFFFDDA8)) else UiTone(Color(0xFFFFE0B2), Color(0xFF5D3A00))
+}
+
+/**
+ * Card de sección: icono (color primario) + título y contenido debajo.
+ * [containerColor] / [contentColor] permiten teñirla (estados verde/ámbar); por defecto no cambia nada.
+ */
 @Composable
 fun UiCard(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     title: String? = null,
-    containerColor: Color = Color.Unspecified,
-    contentColor: Color = Color.Unspecified,
+    containerColor: Color? = null,
+    contentColor: Color? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
-    val bg = if (containerColor == Color.Unspecified) cs.surfaceContainerHigh else containerColor
-    val titleColor = if (contentColor == Color.Unspecified) cs.onSurface else contentColor
-    val iconTint = if (contentColor == Color.Unspecified) cs.primary else contentColor
     Column(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(UiCardRadius))
-            .background(bg)
+            .background(containerColor ?: cs.surfaceContainerHigh)
             .padding(20.dp)
             .animateContentSize()
     ) {
         if (title != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
-                    Icon(icon, null, tint = iconTint, modifier = Modifier.size(24.dp))
+                    Icon(icon, null, tint = contentColor ?: cs.primary, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(12.dp))
                 }
                 Text(
                     title,
-                    color = titleColor,
+                    color = contentColor ?: cs.onSurface,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,

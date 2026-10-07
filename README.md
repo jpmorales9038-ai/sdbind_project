@@ -5,7 +5,7 @@
 
   **Vincula tarjetas SD y unidades OTG dentro del almacenamiento interno de tu Android — sin copiar archivos.**
 
-  ![versión](https://img.shields.io/badge/versión-v2.9.2-c5c0ff?style=for-the-badge&labelColor=131318)
+  ![versión](https://img.shields.io/badge/versión-v2.9.3-c5c0ff?style=for-the-badge&labelColor=131318)
   ![root](https://img.shields.io/badge/root-KernelSU%20%7C%20KernelSU--Next-1c1b21?style=for-the-badge)
   ![plataforma](https://img.shields.io/badge/plataforma-Android-1c1b21?style=for-the-badge)
 </div>
@@ -41,9 +41,8 @@ de uso de almacenamiento y gestión de vínculos.
 - 🧭 **Navegación Expressive** — barra inferior nativa, botón de acción extendido y deslizamiento entre pestañas.
 - ♻️ **Persistencia entre reinicios** — los vínculos se vuelven a aplicar solos al
   arrancar el teléfono (`post-fs-data.sh` / `service.sh`).
-- 🔄 **Autoactualización** — la tarjeta *Actualizaciones* actualiza la **app** con un toque
-  (se pone verde); si al abrir la app su versión no coincide con la del módulo, se pone
-  ámbar y permite descargar el módulo y flashearlo desde la propia app.
+- 🔄 **Autoactualización** — la app comprueba nuevas versiones y descarga el zip listo
+  para flashear.
 - 🌐 **Español / inglés** — interfaz localizada en ambos idiomas.
 
 <br/>
