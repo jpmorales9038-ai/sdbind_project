@@ -82,9 +82,10 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    // Material 3 Expressive (MaterialExpressiveTheme, ShortNavigationBar, LoadingIndicator,
-    // CircularWavyProgressIndicator, MaterialShapes...): 1.4.0 o superior.
-    implementation("androidx.compose.material3:material3")
+    // Material 3 Expressive. La 1.4.0 estable (la que trae el BOM) deja las APIs Expressive
+    // internas (MotionScheme, Typography.*Emphasized, MaterialShapes, LoadingIndicator...),
+    // así que se fija la línea 1.5.0-alpha, que sí las expone (con opt-in).
+    implementation("androidx.compose.material3:material3:1.5.0-alpha23")
     implementation("androidx.graphics:graphics-shapes:1.0.1")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.animation:animation")
