@@ -95,4 +95,8 @@
     <string name="update_up_to_date">Ya estás al día (%1$s)</string>
     <string name="update_no_zip">La release %1$s no trae un .zip</string>
     <string name="update_empty">La descarga quedó vacía</string>
+    <string name="tab_settings">Ajustes</string>
+    <string name="use_binds">Usar vínculos</string>
+    <string name="state_on">Activado</string>
+    <string name="state_off">Desactivado</string>
 </resources>

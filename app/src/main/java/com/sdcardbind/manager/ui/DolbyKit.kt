@@ -1,0 +1,273 @@
+package com.sdcardbind.manager.ui
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+/*
+ * Kit visual "estilo Dolby Atmos": réplica de la app Dolby de Pixel/AOSP.
+ * Medidas tomadas de las capturas de referencia (1080 px de ancho ≈ 392 dp).
+ * Los colores salen todos del ColorScheme (Material You), nada fijo.
+ */
+
+/** Margen lateral de pantalla y radio de las cards, igual que la referencia. */
+val DolbyScreenPadding = 16.dp
+private val DolbyCardRadius = 36.dp
+
+/** Espacio inferior que hay que dejar en listas para que la barra flotante no tape contenido. */
+val DolbyNavClearance = 120.dp
+
+/** Título grande a la izquierda + acciones (iconos sin fondo) a la derecha. */
+@Composable
+fun DolbyHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    actions: @Composable RowScope.() -> Unit = {}
+) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(start = DolbyScreenPadding + 1.dp, end = 8.dp, top = 16.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            title,
+            color = cs.onBackground,
+            fontSize = 36.sp,
+            lineHeight = 44.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        actions()
+    }
+}
+
+/** Card de sección: icono (color primario) + título y contenido debajo. */
+@Composable
+fun DolbyCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    title: String? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(DolbyCardRadius))
+            .background(cs.surfaceContainerHigh)
+            .padding(20.dp)
+            .animateContentSize()
+    ) {
+        if (title != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Icon(icon, null, tint = cs.primary, modifier = Modifier.size(26.dp))
+                    Spacer(Modifier.width(12.dp))
+                }
+                Text(
+                    title,
+                    color = cs.onSurface,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+        content()
+    }
+}
+
+/** Color de las "píldoras" interiores de una [DolbyCard] (campos, tiles, filas). */
+@Composable
+fun dolbyInnerColor(): Color = MaterialTheme.colorScheme.surfaceContainerHighest
+
+/** Glifo de barras ecualizadoras de la card principal (anchos × altos en dp, alineadas abajo). */
+@Composable
+fun BarsGlyph(color: Color, modifier: Modifier = Modifier) {
+    val widths = listOf(6.5f, 7.5f, 9.5f, 11f, 12f, 12.5f, 12.5f, 10.5f, 10f, 7.5f, 5.5f)
+    val heights = listOf(18f, 17f, 14f, 13f, 21f, 20f, 28f, 34f, 35f, 30f, 20f)
+    Row(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        widths.indices.forEach { i ->
+            Box(
+                Modifier
+                    .width(widths[i].dp)
+                    .height(heights[i].dp)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+        }
+    }
+}
+
+/**
+ * Card principal de Inicio: banner con degradado + glifo y, debajo, título/estado con el
+ * interruptor (con X / ✓ dentro del pulgar, como en la referencia).
+ */
+@Composable
+fun DolbyHeroCard(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cs = MaterialTheme.colorScheme
+    val gradient = Brush.linearGradient(
+        listOf(cs.secondaryContainer, lerp(cs.tertiaryContainer, cs.tertiary, 0.5f))
+    )
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(DolbyCardRadius))) {
+        Box(
+            Modifier.fillMaxWidth().height(120.dp).background(gradient),
+            contentAlignment = Alignment.Center
+        ) {
+            BarsGlyph(color = cs.primary)
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(cs.surfaceContainerHigh)
+                .toggleable(
+                    value = checked,
+                    enabled = enabled,
+                    role = Role.Switch,
+                    onValueChange = onCheckedChange
+                )
+                .padding(horizontal = 20.dp, vertical = 22.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    color = cs.onSurface,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(subtitle, color = cs.onSurfaceVariant, fontSize = 16.sp)
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = checked,
+                onCheckedChange = null,
+                enabled = enabled,
+                thumbContent = {
+                    Icon(
+                        if (checked) Icons.Filled.Check else Icons.Filled.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                    )
+                }
+            )
+        }
+    }
+}
+
+data class DolbyNavItem(val label: String, val icon: ImageVector)
+
+/**
+ * Barra de navegación flotante en píldora: la pestaña activa se resalta con su etiqueta, las
+ * demás muestran solo el icono. Va superpuesta al contenido (no reserva espacio).
+ */
+@Composable
+fun DolbyNavBar(
+    items: List<DolbyNavItem>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        modifier
+            .clip(CircleShape)
+            .background(cs.secondaryContainer)
+            .padding(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items.forEachIndexed { i, item ->
+            val sel = i == selected
+            val bg by animateColorAsState(if (sel) cs.primary else Color.Transparent, label = "navBg")
+            val fg by animateColorAsState(if (sel) cs.onPrimary else cs.onSecondaryContainer, label = "navFg")
+            Row(
+                Modifier
+                    .height(56.dp)
+                    .clip(CircleShape)
+                    .background(bg)
+                    .selectable(selected = sel, role = Role.Tab, onClick = { onSelect(i) })
+                    .padding(horizontal = if (sel) 24.dp else 20.dp)
+                    .animateContentSize(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(item.icon, contentDescription = if (sel) null else item.label, tint = fg, modifier = Modifier.size(28.dp))
+                AnimatedVisibility(
+                    visible = sel,
+                    enter = expandHorizontally() + fadeIn(),
+                    exit = shrinkHorizontally() + fadeOut()
+                ) {
+                    Text(
+                        item.label,
+                        color = fg,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 10.dp)
+                    )
+                }
+            }
+        }
+    }
+}

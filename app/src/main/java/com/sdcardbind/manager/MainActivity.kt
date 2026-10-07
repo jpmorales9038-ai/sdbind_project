@@ -87,6 +87,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.sdcardbind.manager.ui.AppTheme
+import com.sdcardbind.manager.ui.DolbyCard
+import com.sdcardbind.manager.ui.DolbyHeader
+import com.sdcardbind.manager.ui.DolbyHeroCard
+import com.sdcardbind.manager.ui.DolbyNavBar
+import com.sdcardbind.manager.ui.DolbyNavItem
+import com.sdcardbind.manager.ui.DolbyNavClearance
+import com.sdcardbind.manager.ui.DolbyScreenPadding
+import com.sdcardbind.manager.ui.dolbyInnerColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -332,49 +340,8 @@ fun BindApp() {
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = cs.background,
-        snackbarHost = { SnackbarHost(snackbarHost) },
-        bottomBar = {
-            AnimatedVisibility(
-                visible = showChrome,
-                enter = slideInVertically(slideSpec) { it } + fadeIn(fadeInSpec),
-                exit = slideOutVertically(slideSpec) { it } + fadeOut(fadeOutSpec)
-            ) {
-                AppNavBar(pagerState = pagerState, onTab = goTab)
-            }
-        },
-        floatingActionButton = {
-            // Sin ninguna unidad externa (SD/OTG) montada no hay de dónde elegir un origen:
-            // el FAB se ve apagado y, en vez de abrir el selector, avisa por qué.
-            AnimatedVisibility(
-                visible = showChrome && currentTab == Tab.Home,
-                enter = scaleIn(fabSpec) + fadeIn(fadeInSpec),
-                exit = scaleOut(fabSpec) + fadeOut(fadeOutSpec)
-            ) {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        if (hasExternal) {
-                            flow = Flow.PickSource; pendingSource = ""
-                        } else {
-                            snack = context.getString(R.string.no_external_hint)
-                        }
-                    },
-                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                    text = { Text(stringResource(R.string.add_bind)) },
-                    containerColor = if (hasExternal) cs.primaryContainer else cs.surfaceVariant,
-                    contentColor = if (hasExternal) cs.onPrimaryContainer else cs.onSurfaceVariant.copy(alpha = 0.6f)
-                )
-            }
-            AnimatedVisibility(
-                visible = showChrome && currentTab == Tab.Log,
-                enter = scaleIn(fabSpec) + fadeIn(fadeInSpec),
-                exit = scaleOut(fabSpec) + fadeOut(fadeOutSpec)
-            ) {
-                FloatingActionButton(
-                    onClick = { clearLogNow() },
-                    containerColor = cs.errorContainer,
-                    contentColor = cs.onErrorContainer
-                ) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.clear_log)) }
-            }
+        snackbarHost = {
+            SnackbarHost(snackbarHost, Modifier.padding(bottom = if (showChrome) 96.dp else 0.dp))
         }
     ) { pad ->
         Row(
@@ -445,7 +412,7 @@ fun BindApp() {
                     userScrollEnabled = true
                 ) { page ->
                     when (page) {
-                        1 -> LogPane(log)
+                        1 -> LogPane(log, onClear = { clearLogNow() })
                         2 -> AboutPane(
                             busy = busy,
                             onCheck = {
@@ -478,24 +445,52 @@ fun BindApp() {
                             onRefreshStorage = { refresh(true) },
                             onDelete = { i -> pendingDelete = entries.getOrNull(i) },
                             onOpen = { path -> browsePath = path; flow = Flow.Browse },
-                            onApply = {
-                                scope.launch {
-                                    busy = true
-                                    popupQuietUntil = System.currentTimeMillis() + 8000
-                                    val ok = RootOps.saveAndApply(entries)
-                                    snack = if (ok) context.getString(R.string.binds_applied)
-                                    else context.getString(R.string.mount_failed)
-                                    refresh()
-                                    busy = false
+                            onInfo = { goTab(Tab.About) },
+                            onAdd = {
+                                if (hasExternal) {
+                                    flow = Flow.PickSource; pendingSource = ""
+                                } else {
+                                    snack = context.getString(R.string.no_external_hint)
                                 }
                             },
-                            onUnmount = { unmountAllNow() }
+                            onToggle = { on ->
+                                if (!on) {
+                                    unmountAllNow()
+                                } else if (!hasExternal) {
+                                    snack = context.getString(R.string.no_external_hint)
+                                } else if (entries.isEmpty()) {
+                                    snack = context.getString(R.string.nothing_bound)
+                                } else {
+                                    scope.launch {
+                                        busy = true
+                                        popupQuietUntil = System.currentTimeMillis() + 8000
+                                        val ok = RootOps.saveAndApply(entries)
+                                        snack = if (ok) context.getString(R.string.binds_applied)
+                                        else context.getString(R.string.mount_failed)
+                                        refresh()
+                                        busy = false
+                                    }
+                                }
+                            }
                         )
                     }
                 }
             }
         }
         }
+    }
+    // Barra flotante estilo Dolby: superpuesta al contenido, centrada abajo.
+    AnimatedVisibility(
+        visible = showChrome,
+        modifier = Modifier.align(Alignment.BottomCenter),
+        enter = slideInVertically(slideSpec) { it } + fadeIn(fadeInSpec),
+        exit = slideOutVertically(slideSpec) { it } + fadeOut(fadeOutSpec)
+    ) {
+        AppNavBar(
+            selected = pagerState.currentPage,
+            onTab = goTab,
+            modifier = Modifier.navigationBarsPadding().padding(bottom = 16.dp)
+        )
     }
     OtgConnectPopup(vol = otgPopup, onDismiss = { otgPopup = null })
     pendingDelete?.let { entry ->
@@ -617,28 +612,15 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
     }
 }
 
-/**
- * Barra de navegación Material 3 Expressive (reemplaza el "pill" flotante hecho a mano y su
- * difuminado): menos capas de dibujo, accesibilidad y animaciones del sistema.
- */
+/** Barra de navegación flotante estilo Dolby (ver ui/DolbyKit.kt). */
 @Composable
-private fun AppNavBar(pagerState: PagerState, onTab: (Tab) -> Unit) {
-    val labels = listOf(
-        stringResource(R.string.tab_home),
-        stringResource(R.string.tab_log),
-        stringResource(R.string.tab_about)
+private fun AppNavBar(selected: Int, onTab: (Tab) -> Unit, modifier: Modifier = Modifier) {
+    val items = listOf(
+        DolbyNavItem(stringResource(R.string.tab_home), Icons.Filled.Home),
+        DolbyNavItem(stringResource(R.string.tab_log), Icons.Filled.Notes),
+        DolbyNavItem(stringResource(R.string.tab_settings), Icons.Filled.Settings)
     )
-    val icons = listOf(Icons.Filled.Home, Icons.Filled.Notes, Icons.Filled.Info)
-    ShortNavigationBar {
-        Tab.entries.forEachIndexed { i, tab ->
-            ShortNavigationBarItem(
-                selected = pagerState.currentPage == i,
-                onClick = { onTab(tab) },
-                icon = { Icon(icons[i], contentDescription = null) },
-                label = { Text(labels[i]) }
-            )
-        }
-    }
+    DolbyNavBar(items = items, selected = selected, onSelect = { onTab(Tab.entries[it]) }, modifier = modifier)
 }
 
 @Composable
@@ -667,54 +649,66 @@ private fun HomePane(
     onRefreshStorage: () -> Unit,
     onDelete: (Int) -> Unit,
     onOpen: (String) -> Unit,
-    onApply: () -> Unit,
-    onUnmount: () -> Unit
+    onInfo: () -> Unit,
+    onAdd: () -> Unit,
+    onToggle: (Boolean) -> Unit
 ) {
+    val active = entries.any { it.status == "MOUNTED" }
+    val hasExternal = volumes.any { it.kind == VolumeKind.EXTERNAL }
+    val header: @Composable () -> Unit = {
+        DolbyHeader("SD Bind") {
+            IconButton(onClick = onInfo) { Icon(Icons.Filled.Info, contentDescription = stringResource(R.string.about)) }
+            IconButton(onClick = onRefreshStorage) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.storage_updated)) }
+        }
+    }
+    val hero: @Composable () -> Unit = {
+        DolbyHeroCard(
+            title = stringResource(R.string.use_binds),
+            subtitle = stringResource(if (active) R.string.state_on else R.string.state_off),
+            checked = active,
+            enabled = !busy,
+            onCheckedChange = onToggle
+        )
+    }
+    val storage: @Composable () -> Unit = {
+        StorageCard(volumes, playToken, onRefreshStorage)
+    }
+    val binds: @Composable () -> Unit = {
+        DolbyCard(icon = Icons.Filled.Link, title = stringResource(R.string.binds)) {
+            BindList(entries, onDelete, onOpen)
+            Spacer(Modifier.height(12.dp))
+            AddBindButton(hasExternal, onAdd)
+        }
+    }
     if (landscape) {
-        Row(Modifier.fillMaxSize().padding(12.dp)) {
+        Row(Modifier.fillMaxSize().padding(horizontal = DolbyScreenPadding)) {
             Column(
                 Modifier.weight(0.42f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(end = 8.dp)
             ) {
-                HomeHeader()
+                header()
+                hero()
                 Spacer(Modifier.height(16.dp))
-                StorageHero(volumes, playToken, onRefreshStorage)
-                Spacer(Modifier.height(16.dp))
-                ActionButtons(busy, entries.isNotEmpty(), volumes.any { it.kind == VolumeKind.EXTERNAL }, onApply, onUnmount)
-                Spacer(Modifier.height(24.dp))
+                storage()
+                Spacer(Modifier.height(DolbyNavClearance))
             }
             Column(
-                Modifier.weight(0.58f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 8.dp)
+                Modifier.weight(0.58f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 8.dp, top = 16.dp)
             ) {
-                BindList(entries, onDelete, onOpen)
-                Spacer(Modifier.height(80.dp))
+                binds()
+                Spacer(Modifier.height(DolbyNavClearance))
             }
         }
     } else {
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
-        ) {
-            Spacer(Modifier.height(12.dp))
-            HomeHeader()
-            Spacer(Modifier.height(20.dp))
-            StorageHero(volumes, playToken, onRefreshStorage)
-            Spacer(Modifier.height(28.dp))
-            BindList(entries, onDelete, onOpen)
-            Spacer(Modifier.height(16.dp))
-            ActionButtons(busy, entries.isNotEmpty(), volumes.any { it.kind == VolumeKind.EXTERNAL }, onApply, onUnmount)
-            Spacer(Modifier.height(96.dp))
-        }
-    }
-}
-
-@Composable
-private fun HomeHeader() {
-    val cs = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("SD Bind", color = cs.onBackground, style = MaterialTheme.typography.displaySmallEmphasized, modifier = Modifier.weight(1f))
-        Box(
-            Modifier.clip(CircleShape).background(cs.tertiaryContainer).padding(horizontal = 12.dp, vertical = 6.dp)
-        ) {
-            Text(stringResource(R.string.root_ok), color = cs.onTertiaryContainer, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            header()
+            Column(Modifier.padding(horizontal = DolbyScreenPadding)) {
+                hero()
+                Spacer(Modifier.height(16.dp))
+                storage()
+                Spacer(Modifier.height(16.dp))
+                binds()
+            }
+            Spacer(Modifier.height(DolbyNavClearance))
         }
     }
 }
@@ -726,11 +720,9 @@ private fun BindList(
     onOpen: (String) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
-    Text(stringResource(R.string.binds), color = cs.onBackground, style = MaterialTheme.typography.titleLargeEmphasized)
-    Spacer(Modifier.height(12.dp))
     if (entries.isEmpty()) {
         Box(
-            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.extraLarge).background(cs.surfaceContainer).padding(28.dp),
+            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(dolbyInnerColor()).padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -742,45 +734,41 @@ private fun BindList(
         }
     } else {
         entries.forEachIndexed { i, e ->
+            if (i > 0) Spacer(Modifier.height(10.dp))
             BindCard(e, onDelete = { onDelete(i) }, onOpen = { onOpen(e.dest) })
-            Spacer(Modifier.height(10.dp))
         }
     }
 }
 
+/** Botón "Añadir vínculo": apagado (pero tocable, para avisar por qué) si no hay SD/OTG. */
 @Composable
-private fun ActionButtons(busy: Boolean, hasEntries: Boolean, hasExternal: Boolean, onApply: () -> Unit, onUnmount: () -> Unit) {
+private fun AddBindButton(hasExternal: Boolean, onAdd: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Button(
-        onClick = onApply,
-        enabled = !busy && hasEntries && hasExternal,
+        onClick = onAdd,
         modifier = Modifier.fillMaxWidth().heightIn(min = ButtonDefaults.MediumContainerHeight),
-        shapes = ButtonDefaults.shapes()
-    ) { Text(stringResource(R.string.save_mount), style = MaterialTheme.typography.titleMediumEmphasized) }
-    Spacer(Modifier.height(8.dp))
-    // "Desmontar todo" queda siempre disponible a propósito (no depende de hasExternal): es
-    // la vía manual de escape si algo quedó mal desmontado justo después de retirar la
-    // unidad, aunque el auto-desmontado ya debería encargarse solo.
-    TextButton(onClick = onUnmount, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.unmount_all), color = cs.error)
+        shapes = ButtonDefaults.shapes(),
+        colors = if (hasExternal) ButtonDefaults.buttonColors()
+        else ButtonDefaults.buttonColors(
+            containerColor = dolbyInnerColor(),
+            contentColor = cs.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+    ) {
+        Icon(Icons.Filled.Add, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.add_bind), style = MaterialTheme.typography.titleMediumEmphasized)
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StorageHero(volumes: List<StorageVolume>, playToken: Int, onRefresh: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(cs.surfaceContainer)
-            .pointerInput(Unit) { detectTapGestures(onLongPress = { onRefresh() }) }
-            .padding(20.dp)
-            .animateContentSize(sizeSpec())
+private fun StorageCard(volumes: List<StorageVolume>, playToken: Int, onRefresh: () -> Unit) {
+    DolbyCard(
+        modifier = Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { onRefresh() }) },
+        icon = Icons.Filled.Storage,
+        title = stringResource(R.string.storage)
     ) {
-        Text(stringResource(R.string.storage), color = cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(16.dp))
+        val cs = MaterialTheme.colorScheme
         if (volumes.isEmpty()) {
             Text(stringResource(R.string.long_press_refresh), color = cs.onSurfaceVariant)
         } else {
@@ -931,8 +919,8 @@ private fun BindCard(entry: MountEntry, onDelete: () -> Unit, onOpen: () -> Unit
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(cs.surfaceContainer)
+            .clip(MaterialTheme.shapes.large)
+            .background(dolbyInnerColor())
             .padding(14.dp)
             .animateContentSize(sizeSpec()),
         verticalAlignment = Alignment.CenterVertically
@@ -1082,95 +1070,72 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
         }.getOrNull() ?: "2.5.1"
     }
     val iconDp = (minOf(cfg.screenWidthDp, cfg.screenHeightDp) * 0.32f).coerceIn(104f, 176f).dp
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
-    ) {
-        Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.about), color = cs.onBackground, style = MaterialTheme.typography.displaySmallEmphasized)
-        Spacer(Modifier.height(20.dp))
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(36.dp))
-                .background(cs.surfaceContainer)
-                .padding(vertical = 28.dp, horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            AppMark(Modifier.size(iconDp))
-            Spacer(Modifier.height(16.dp))
-            Text("SD Bind", color = cs.onSurface, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text(stringResource(R.string.version_fmt, ver ?: "2.5.4"), color = cs.onSurfaceVariant, fontSize = 14.sp)
-        }
-        Spacer(Modifier.height(24.dp))
-        Text(stringResource(R.string.tools), color = cs.onBackground, style = MaterialTheme.typography.titleLargeEmphasized)
-        Spacer(Modifier.height(12.dp))
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp))
-                .background(cs.surfaceContainerHigh)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                Modifier.size(52.dp).clip(RoundedCornerShape(18.dp)).background(cs.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Filled.SystemUpdate, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(26.dp))
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.updates), color = cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                Text(
-                    stringResource(R.string.updates_desc),
-                    color = cs.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            Button(
-                onClick = onCheck,
-                enabled = !busy,
-                shapes = ButtonDefaults.shapes()
-            ) {
-                if (busy) {
-                    LoadingIndicator(Modifier.size(24.dp), color = cs.onPrimary)
-                } else {
-                    Text(stringResource(R.string.search))
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        DolbyHeader(stringResource(R.string.tab_settings))
+        Column(Modifier.padding(horizontal = DolbyScreenPadding)) {
+            DolbyCard(icon = Icons.Filled.Info, title = stringResource(R.string.about)) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    AppMark(Modifier.size(iconDp))
+                    Spacer(Modifier.height(16.dp))
+                    Text("SD Bind", color = cs.onSurface, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.version_fmt, ver ?: "2.5.4"), color = cs.onSurfaceVariant, fontSize = 14.sp)
                 }
             }
+            Spacer(Modifier.height(16.dp))
+            DolbyCard(icon = Icons.Filled.SystemUpdate, title = stringResource(R.string.updates)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.updates_desc),
+                        color = cs.onSurfaceVariant,
+                        fontSize = 14.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Button(
+                        onClick = onCheck,
+                        enabled = !busy,
+                        shapes = ButtonDefaults.shapes()
+                    ) {
+                        if (busy) {
+                            LoadingIndicator(Modifier.size(24.dp), color = cs.onPrimary)
+                        } else {
+                            Text(stringResource(R.string.search))
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                AboutMiniCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Filled.Folder,
+                    title = stringResource(R.string.card_binds),
+                    body = stringResource(R.string.card_binds_desc)
+                )
+                AboutMiniCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Filled.Build,
+                    title = stringResource(R.string.card_module),
+                    body = stringResource(R.string.card_module_desc)
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                AboutMiniCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Filled.FolderOpen,
+                    title = stringResource(R.string.card_explorer),
+                    body = stringResource(R.string.card_explorer_desc)
+                )
+                AboutMiniCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Filled.ColorLens,
+                    title = stringResource(R.string.card_material),
+                    body = stringResource(R.string.card_material_desc)
+                )
+            }
         }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AboutMiniCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Filled.Folder,
-                title = stringResource(R.string.card_binds),
-                body = stringResource(R.string.card_binds_desc)
-            )
-            AboutMiniCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Filled.Build,
-                title = stringResource(R.string.card_module),
-                body = stringResource(R.string.card_module_desc)
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AboutMiniCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Filled.FolderOpen,
-                title = stringResource(R.string.card_explorer),
-                body = stringResource(R.string.card_explorer_desc)
-            )
-            AboutMiniCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Filled.ColorLens,
-                title = stringResource(R.string.card_material),
-                body = stringResource(R.string.card_material_desc)
-            )
-        }
-        Spacer(Modifier.height(96.dp))
+        Spacer(Modifier.height(DolbyNavClearance))
     }
 }
 
@@ -1179,13 +1144,13 @@ private fun AboutMiniCard(modifier: Modifier, icon: ImageVector, title: String, 
     val cs = MaterialTheme.colorScheme
     Column(
         modifier
-            .clip(RoundedCornerShape(28.dp))
-            .background(cs.surfaceContainer)
-            .padding(16.dp)
-            .height(148.dp)
+            .clip(RoundedCornerShape(36.dp))
+            .background(cs.surfaceContainerHigh)
+            .padding(20.dp)
+            .height(160.dp)
     ) {
         Box(
-            Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(cs.secondaryContainer),
+            Modifier.size(48.dp).clip(CircleShape).background(cs.secondaryContainer),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(24.dp))
@@ -1198,24 +1163,12 @@ private fun AboutMiniCard(modifier: Modifier, icon: ImageVector, title: String, 
 }
 
 @Composable
-private fun LogPane(log: String) {
+private fun LogPane(log: String, onClear: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    Column(
-        Modifier
-            .fillMaxSize()
-            // Abajo se deja más aire que en los otros lados: el FAB de borrar queda
-            // flotando sobre el borde inferior de la tarjeta del registro.
-            .padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 96.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                stringResource(R.string.log),
-                color = cs.onBackground,
-                style = MaterialTheme.typography.displaySmallEmphasized,
-                modifier = Modifier.weight(1f)
-            )
+    Column(Modifier.fillMaxSize()) {
+        DolbyHeader(stringResource(R.string.log)) {
             IconButton(onClick = {
                 scope.launch {
                     val full = RootOps.fullLog()
@@ -1224,18 +1177,21 @@ private fun LogPane(log: String) {
             }) {
                 Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.share_log))
             }
+            IconButton(onClick = onClear) {
+                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.clear_log))
+            }
         }
-        Spacer(Modifier.height(16.dp))
         Box(
             Modifier
-                .fillMaxSize()
-                .clip(MaterialTheme.shapes.extraLarge)
-                .background(cs.surfaceContainerLowest)
-                .padding(16.dp)
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(start = DolbyScreenPadding, end = DolbyScreenPadding, bottom = DolbyNavClearance)
+                .clip(RoundedCornerShape(36.dp))
+                .background(cs.surfaceContainerHigh)
+                .padding(20.dp)
         ) {
-            // Al vaciar el log (botón de borrar), el texto anterior se desvanece deslizándose
-            // hacia arriba en vez de desaparecer de golpe; el mensaje de "log vacío" entra con
-            // un fundido suave por detrás.
+            // Al vaciar el log, el texto anterior se desvanece deslizándose hacia arriba; el
+            // mensaje de "log vacío" entra con un fundido suave por detrás.
             AnimatedContent(
                 targetState = log,
                 transitionSpec = {
