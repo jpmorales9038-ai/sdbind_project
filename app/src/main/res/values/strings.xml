@@ -68,7 +68,7 @@
     <string name="version_fmt">versión %1$s</string>
     <string name="tools">Herramientas</string>
     <string name="updates">Actualizaciones</string>
-    <string name="updates_desc">Si hay una versión nueva, descarga el zip y te pregunta con qué app flashearlo (KernelSU).</string>
+    <string name="updates_desc">Busca una versión nueva de la app y se actualiza sola al tocar el botón.</string>
     <string name="search">Buscar</string>
     <string name="card_binds">Vínculos</string>
     <string name="card_binds_desc">Monta carpetas de SD u OTG dentro del interno</string>
@@ -95,6 +95,14 @@
     <string name="update_up_to_date">Ya estás al día (%1$s)</string>
     <string name="update_no_zip">La release %1$s no trae un .zip</string>
     <string name="update_empty">La descarga quedó vacía</string>
+    <string name="update_app_ok">App al día (%1$s)</string>
+    <string name="update_app_working">Buscando y descargando la app…</string>
+    <string name="update_app_installing">Instalando %1$s… la app se reiniciará</string>
+    <string name="update_install_failed">No se pudo actualizar la app: %1$s</string>
+    <string name="update_install_start">No se pudo iniciar la instalación (¿root?)</string>
+    <string name="update_module_mismatch">La app es %1$s pero el módulo es %2$s. Descarga el módulo y flashéalo.</string>
+    <string name="update_module_downloading">Descargando el módulo…</string>
+    <string name="update_flash_module">Flashear módulo</string>
     <string name="tab_settings">Ajustes</string>
     <string name="use_binds">Usar vínculos</string>
     <string name="state_on">Activado</string>

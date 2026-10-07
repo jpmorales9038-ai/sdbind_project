@@ -96,26 +96,31 @@ fun UiCard(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     title: String? = null,
+    containerColor: Color = Color.Unspecified,
+    contentColor: Color = Color.Unspecified,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
+    val bg = if (containerColor == Color.Unspecified) cs.surfaceContainerHigh else containerColor
+    val titleColor = if (contentColor == Color.Unspecified) cs.onSurface else contentColor
+    val iconTint = if (contentColor == Color.Unspecified) cs.primary else contentColor
     Column(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(UiCardRadius))
-            .background(cs.surfaceContainerHigh)
+            .background(bg)
             .padding(20.dp)
             .animateContentSize()
     ) {
         if (title != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
-                    Icon(icon, null, tint = cs.primary, modifier = Modifier.size(24.dp))
+                    Icon(icon, null, tint = iconTint, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(12.dp))
                 }
                 Text(
                     title,
-                    color = cs.onSurface,
+                    color = titleColor,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,

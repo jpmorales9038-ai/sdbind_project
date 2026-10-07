@@ -97,6 +97,7 @@ jobs:
           prerelease: ${{ steps.ver.outputs.prerelease }}
           files: |
             sdcard_bind_ui_con_app.zip
+            module/app/sdcard-bind-manager.apk
             update.json
           generate_release_notes: true
           make_latest: ${{ steps.ver.outputs.latest }}

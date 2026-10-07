@@ -19,10 +19,20 @@ sealed class UpdateOutcome {
     data class Info(val message: String) : UpdateOutcome()
 }
 
+sealed class AppUpdateOutcome {
+    data class UpToDate(val version: String) : AppUpdateOutcome()
+    /** El instalador root ya arrancó: Android reinicia la app al terminar. */
+    data class Installing(val tag: String) : AppUpdateOutcome()
+    data class Failed(val message: String) : AppUpdateOutcome()
+}
+
 object Updater {
 
     const val DEFAULT_REPO = "jpmorales9038-ai/sdbind_project"
     private const val ZIP_NAME = "sdcard_bind_ui.zip"
+    private const val APK_NAME = "sdbind-app.apk"
+    private const val APK_IN_ZIP = "app/sdcard-bind-manager.apk"
+    private const val INSTALL_LOG = "/data/local/tmp/sdbind_install.log"
 
     private val managers = listOf(
         "com.rifsxd.ksunext" to "com.rifsxd.ksunext.ui.MainActivity",
@@ -41,28 +51,114 @@ object Updater {
         if (fromModule.contains("/")) fromModule else DEFAULT_REPO
     }
 
-    suspend fun checkAndDownload(context: Context, localVersion: String): UpdateOutcome =
-        withContext(Dispatchers.IO) {
-            val repo = configuredRepo()
-            val body = httpGet("https://api.github.com/repos/$repo/releases/latest")
-                ?: return@withContext UpdateOutcome.Info(context.getString(R.string.update_no_github))
-            val json = JSONObject(body)
-            if (json.has("message") && !json.has("tag_name")) {
-                val msg = json.optString("message")
-                return@withContext UpdateOutcome.Info(
-                    if (msg.contains("Not Found", true))
-                        context.getString(R.string.update_no_releases)
+    /** Versión del módulo instalado (module.prop), o null si no se puede leer. */
+    suspend fun moduleVersion(): String? = withContext(Dispatchers.IO) {
+        Shell.cmd("grep -m1 '^version=' $MODDIR/module.prop 2>/dev/null").exec().out
+            .firstOrNull()
+            ?.substringAfter("=")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+    }
+
+    /** Compara solo los números (v2.9.1 == 2.9.1 == 2.9.1.0). */
+    fun sameVersion(a: String, b: String): Boolean {
+        fun norm(s: String) = verParts(s).dropLastWhile { it == 0 }
+        return norm(a) == norm(b)
+    }
+
+    private fun latestRelease(context: Context, repo: String): Result<JSONObject> {
+        val body = httpGet("https://api.github.com/repos/$repo/releases/latest")
+            ?: return Result.failure(Exception(context.getString(R.string.update_no_github)))
+        val json = runCatching { JSONObject(body) }.getOrNull()
+            ?: return Result.failure(Exception(context.getString(R.string.update_no_github)))
+        if (json.has("message") && !json.has("tag_name")) {
+            val msg = json.optString("message")
+            return Result.failure(
+                Exception(
+                    if (msg.contains("Not Found", true)) context.getString(R.string.update_no_releases)
                     else msg
                 )
-            }
-            val tag = json.optString("tag_name").ifBlank { json.optString("name") }
+            )
+        }
+        return Result.success(json)
+    }
+
+    private fun tagOf(json: JSONObject): String =
+        json.optString("tag_name").ifBlank { json.optString("name") }
+
+    /**
+     * Actualiza la APP (no el módulo): busca el último release, descarga el APK y lo instala
+     * con root (`pm install -r`, misma firma). Android mata la app al reemplazarse, así que el
+     * instalador corre desacoplado y vuelve a abrirla al terminar.
+     */
+    suspend fun updateApp(
+        context: Context,
+        localVersion: String,
+        onInstalling: (String) -> Unit = {}
+    ): AppUpdateOutcome =
+        withContext(Dispatchers.IO) {
+            val release = latestRelease(context, configuredRepo())
+                .getOrElse { return@withContext AppUpdateOutcome.Failed(it.message.orEmpty()) }
+            val tag = tagOf(release)
             if (!isNewer(tag, localVersion)) {
-                return@withContext UpdateOutcome.Info(context.getString(R.string.update_up_to_date, localVersion))
+                return@withContext AppUpdateOutcome.UpToDate(localVersion)
             }
-            val zipUrl = findModuleZip(json)
+            val apk = File(context.cacheDir, APK_NAME)
+            apk.delete()
+            try {
+                val apkUrl = findAsset(release) { it.endsWith(".apk") }
+                if (apkUrl != null) {
+                    httpDownload(apkUrl, apk)
+                } else {
+                    // Releases antiguas sin APK suelto: el APK va dentro del zip del módulo.
+                    val zipUrl = findModuleZip(release)
+                        ?: return@withContext AppUpdateOutcome.Failed(
+                            context.getString(R.string.update_no_zip, tag)
+                        )
+                    val tmp = File(context.cacheDir, ZIP_NAME)
+                    httpDownload(zipUrl, tmp)
+                    extractFromZip(tmp, APK_IN_ZIP, apk)
+                }
+            } catch (_: Exception) {
+                return@withContext AppUpdateOutcome.Failed(context.getString(R.string.update_no_github))
+            }
+            if (!apk.exists() || apk.length() < 1024) {
+                return@withContext AppUpdateOutcome.Failed(context.getString(R.string.update_empty))
+            }
+            onInstalling(tag)
+            Shell.cmd("rm -f $INSTALL_LOG").exec()
+            val path = shQuote(apk.absolutePath)
+            val script = "pm install -r -S \$(stat -c %s $path) < $path > $INSTALL_LOG 2>&1; " +
+                "am start --user 0 -n ${context.packageName}/.MainActivity >/dev/null 2>&1"
+            val launched = Shell.cmd("(nohup sh -c ${shQuote(script)} >/dev/null 2>&1 &)").exec()
+            if (!launched.isSuccess) {
+                return@withContext AppUpdateOutcome.Failed(context.getString(R.string.update_install_start))
+            }
+            // Si la instalación funciona, este proceso muere antes de agotar el bucle.
+            repeat(30) {
+                kotlinx.coroutines.delay(1000)
+                val log = Shell.cmd("cat $INSTALL_LOG 2>/dev/null").exec().out.joinToString(" ").trim()
+                if (log.contains("Failure", true) || log.contains("Exception", true)) {
+                    return@withContext AppUpdateOutcome.Failed(log.take(160))
+                }
+            }
+            AppUpdateOutcome.Installing(tag)
+        }
+
+    /** Descarga el zip del módulo del último release (sin exigir que sea más nuevo). */
+    suspend fun downloadModule(context: Context): UpdateOutcome =
+        withContext(Dispatchers.IO) {
+            val release = latestRelease(context, configuredRepo())
+                .getOrElse { return@withContext UpdateOutcome.Info(it.message.orEmpty()) }
+            val tag = tagOf(release)
+            val zipUrl = findModuleZip(release)
                 ?: return@withContext UpdateOutcome.Info(context.getString(R.string.update_no_zip, tag))
             val dest = File(context.cacheDir, ZIP_NAME)
-            httpDownload(zipUrl, dest)
+            try {
+                httpDownload(zipUrl, dest)
+            } catch (_: Exception) {
+                return@withContext UpdateOutcome.Info(context.getString(R.string.update_no_github))
+            }
             if (!dest.exists() || dest.length() < 1024) {
                 return@withContext UpdateOutcome.Info(context.getString(R.string.update_empty))
             }
@@ -72,6 +168,30 @@ object Updater {
             ).exec()
             UpdateOutcome.Ready(tag, dest)
         }
+
+    private fun extractFromZip(zip: File, entry: String, dest: File) {
+        java.util.zip.ZipInputStream(zip.inputStream().buffered()).use { zin ->
+            while (true) {
+                val e = zin.nextEntry ?: break
+                if (e.name == entry) {
+                    dest.outputStream().use { zin.copyTo(it) }
+                    return
+                }
+            }
+        }
+    }
+
+    private fun findAsset(json: JSONObject, match: (String) -> Boolean): String? {
+        val assets = json.optJSONArray("assets") ?: return null
+        for (i in 0 until assets.length()) {
+            val a = assets.getJSONObject(i)
+            if (match(a.optString("name").lowercase())) {
+                val url = a.optString("browser_download_url")
+                if (url.isNotBlank()) return url
+            }
+        }
+        return null
+    }
 
     fun openForFlash(context: Context, zip: File) {
         val named = File(context.cacheDir, ZIP_NAME)
