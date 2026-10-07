@@ -69,7 +69,7 @@ kotlin {
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2025.12.00")
+    val composeBom = platform("androidx.compose:compose-bom:2026.04.01")
     implementation(composeBom)
 
     implementation("androidx.core:core-ktx:1.13.1")
@@ -82,10 +82,10 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    // Material 3 Expressive. La 1.4.0 estable (la que trae el BOM) deja las APIs Expressive
-    // internas (MotionScheme, Typography.*Emphasized, MaterialShapes, LoadingIndicator...),
-    // así que se fija la línea 1.5.0-alpha, que sí las expone (con opt-in).
-    implementation("androidx.compose.material3:material3:1.5.0-alpha23")
+    // Material 3 Expressive. La 1.4.0 estable deja las APIs Expressive internas, así que se
+    // usa la línea 1.5.0-alpha. Ojo: desde alpha20 aprox. depende de Compose 1.12 alpha, que
+    // exige compileSdk 37 + AGP 9.1; alpha18 sigue sobre Compose 1.11 (compileSdk 36, AGP 8.x).
+    implementation("androidx.compose.material3:material3:1.5.0-alpha18")
     implementation("androidx.graphics:graphics-shapes:1.0.1")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.animation:animation")
