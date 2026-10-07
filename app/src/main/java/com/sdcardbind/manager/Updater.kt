@@ -42,7 +42,10 @@ data class ModuleInfo(val version: String, val pendingReboot: Boolean)
 object Updater {
 
     const val DEFAULT_REPO = "jpmorales9038-ai/sdbind_project"
+    // Nombre base del zip del módulo (el asset de la release lleva la versión: ..._v2.9.5.zip).
     private const val ZIP_NAME = "sdcard_bind_ui.zip"
+    private const val ZIP_GLOB = "sdcard_bind_ui_con_app_v*.zip"
+    private const val DOWNLOAD_DIR = "/storage/emulated/0/Download"
     private const val APK_NAME = "sdbind_update.apk"
     private const val APK_IN_ZIP = "sdcard-bind-manager.apk"
     private const val TMP_APK = "/data/local/tmp/sdbind_update.apk"
@@ -308,26 +311,40 @@ object Updater {
 
     // ---------------------------------------------------------------- descarga del módulo
 
+    /** Nombre del zip con la versión, el mismo del asset de la release (sdcard_bind_ui_con_app_v2.9.5.zip). */
+    private fun moduleZipName(rel: ReleaseInfo): String {
+        val raw = rel.zipUrl?.substringBefore('?')?.substringAfterLast('/').orEmpty()
+        val clean = raw.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        return if (clean.endsWith(".zip", ignoreCase = true) && clean.length > 4) clean
+        else "sdcard_bind_ui_${rel.tag.replace(Regex("[^A-Za-z0-9._-]"), "_")}.zip"
+    }
+
     suspend fun downloadModule(context: Context, rel: ReleaseInfo): File? = withContext(Dispatchers.IO) {
         val zipUrl = rel.zipUrl ?: return@withContext null
-        val dest = File(context.cacheDir, ZIP_NAME)
+        val name = moduleZipName(rel)
+        // Quita zips de módulo de descargas anteriores (otra versión) de la caché.
+        context.cacheDir.listFiles { f -> f.name.startsWith("sdcard_bind_ui") && f.name.endsWith(".zip") }
+            ?.forEach { it.delete() }
+        val dest = File(context.cacheDir, name)
         try {
             httpDownload(zipUrl, dest)
         } catch (_: Exception) {
             return@withContext null
         }
         if (!dest.exists() || dest.length() < 1024) return@withContext null
+        // Copia a Descargas con el nombre versionado; borra antes las versiones antiguas que dejó la app.
         Shell.cmd(
-            "cp ${shQuote(dest.absolutePath)} /storage/emulated/0/Download/$ZIP_NAME && " +
-                "chmod 644 /storage/emulated/0/Download/$ZIP_NAME"
+            "rm -f $DOWNLOAD_DIR/$ZIP_NAME $DOWNLOAD_DIR/$ZIP_GLOB; " +
+                "cp ${shQuote(dest.absolutePath)} ${shQuote("$DOWNLOAD_DIR/$name")} && " +
+                "chmod 644 ${shQuote("$DOWNLOAD_DIR/$name")}"
         ).exec()
         dest
     }
 
     fun openForFlash(context: Context, zip: File) {
-        val named = File(context.cacheDir, ZIP_NAME)
-        if (zip.canonicalPath != named.canonicalPath) {
-            zip.copyTo(named, overwrite = true)
+        val cache = context.cacheDir.canonicalPath
+        val named = if (zip.canonicalPath.startsWith(cache)) zip else {
+            File(context.cacheDir, zip.name).also { zip.copyTo(it, overwrite = true) }
         }
         val uri = FileProvider.getUriForFile(
             context,
@@ -345,7 +362,7 @@ object Updater {
                 component = ComponentName(pkg, cls)
                 setDataAndType(uri, "application/zip")
                 putExtra(Intent.EXTRA_STREAM, uri)
-                clipData = ClipData.newUri(context.contentResolver, ZIP_NAME, uri)
+                clipData = ClipData.newUri(context.contentResolver, named.name, uri)
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -361,7 +378,7 @@ object Updater {
         val view = Intent(Intent.ACTION_SEND).apply {
             type = "application/zip"
             putExtra(Intent.EXTRA_STREAM, uri)
-            clipData = ClipData.newUri(context.contentResolver, ZIP_NAME, uri)
+            clipData = ClipData.newUri(context.contentResolver, named.name, uri)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or grant)
         }
         val skip = listOf("anykernel", "kernelflasher", "kernel flasher", "exkm", "franco")

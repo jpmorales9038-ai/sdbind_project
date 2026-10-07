@@ -56,6 +56,9 @@ jobs:
             VER="${BASE}${SUFFIX}"; PRE=true; LATEST=false
           fi
           echo "tag=$VER" >> "$GITHUB_OUTPUT"
+          # Zip del módulo con la versión en el nombre (lo descarga la app y lo flashea el usuario).
+          ZIP="sdcard_bind_ui_con_app_${VER}.zip"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
           # Sufijo que se inyecta en versionName del APK (vacío en main). Así la app instalada sabe
           # qué build de preview es y el updater puede detectar la siguiente pre-release.
           echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
@@ -65,7 +68,7 @@ jobs:
           {
             "version": "$VER",
             "versionCode": $CODE,
-            "zipUrl": "https://github.com/jpmorales9038-ai/sdbind_project/releases/download/${VER}/sdcard_bind_ui_con_app.zip",
+            "zipUrl": "https://github.com/jpmorales9038-ai/sdbind_project/releases/download/${VER}/${ZIP}",
             "changelog": "https://github.com/jpmorales9038-ai/sdbind_project/releases/tag/${VER}"
           }
           EOF
@@ -84,13 +87,13 @@ jobs:
           # mounts.conf es config del usuario, no del proyecto: si algún día aparece
           # trackeado en el repo (a mano o por error), que igual quede afuera del zip.
           # customize.sh ya la recrea/preserva sola en el dispositivo.
-          zip -r -X ../sdcard_bind_ui_con_app.zip . -x ".*" -x "mounts.conf"
+          zip -r -X "../${{ steps.ver.outputs.zip }}" . -x ".*" -x "mounts.conf"
 
       - name: Subir zip como artefacto descargable
         uses: actions/upload-artifact@v4
         with:
-          name: sdcard_bind_ui_con_app
-          path: sdcard_bind_ui_con_app.zip
+          name: ${{ steps.ver.outputs.zip }}
+          path: ${{ steps.ver.outputs.zip }}
 
       - name: Publicar GitHub Release
         uses: softprops/action-gh-release@v2
@@ -100,7 +103,7 @@ jobs:
           name: SD Bind ${{ steps.ver.outputs.tag }}
           prerelease: ${{ steps.ver.outputs.prerelease }}
           files: |
-            sdcard_bind_ui_con_app.zip
+            ${{ steps.ver.outputs.zip }}
             update.json
             module/app/sdcard-bind-manager.apk
           generate_release_notes: true

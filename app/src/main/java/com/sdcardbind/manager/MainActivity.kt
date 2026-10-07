@@ -454,7 +454,6 @@ fun BindApp() {
                             onRefreshStorage = { refresh(true) },
                             onDelete = { i -> pendingDelete = entries.getOrNull(i) },
                             onOpen = { path -> browsePath = path; flow = Flow.Browse },
-                            onInfo = { goTab(Tab.About) },
                             onAdd = {
                                 if (hasExternal) {
                                     flow = Flow.PickSource; pendingSource = ""
@@ -634,7 +633,7 @@ private fun AppNavBar(selected: Int, onTab: (Tab) -> Unit, modifier: Modifier = 
     val items = listOf(
         UiNavItem(stringResource(R.string.tab_home), Icons.Filled.Home),
         UiNavItem(stringResource(R.string.tab_log), Icons.Filled.Notes),
-        UiNavItem(stringResource(R.string.tab_settings), Icons.Filled.Settings)
+        UiNavItem(stringResource(R.string.tab_settings), Icons.Filled.Info)
     )
     UiNavBar(items = items, selected = selected, onSelect = { onTab(Tab.entries[it]) }, modifier = modifier)
 }
@@ -696,17 +695,13 @@ private fun HomePane(
     onRefreshStorage: () -> Unit,
     onDelete: (Int) -> Unit,
     onOpen: (String) -> Unit,
-    onInfo: () -> Unit,
     onAdd: () -> Unit,
     onToggle: (Boolean) -> Unit
 ) {
     val active = entries.any { it.status == "MOUNTED" }
     val hasExternal = volumes.any { it.kind == VolumeKind.EXTERNAL }
     val header: @Composable () -> Unit = {
-        UiHeader(stringResource(R.string.tab_home)) {
-            IconButton(onClick = onInfo) { Icon(Icons.Filled.Info, contentDescription = stringResource(R.string.about)) }
-            IconButton(onClick = onRefreshStorage) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.storage_updated)) }
-        }
+        UiHeader(stringResource(R.string.tab_home))
     }
     val hero: @Composable () -> Unit = {
         UiHeroCard(

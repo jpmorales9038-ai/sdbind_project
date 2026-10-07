@@ -2,8 +2,8 @@
 
 > Léelo completo antes de tocar código.
 > Teléfono: `/storage/emulated/0/Download/sdbind_project/` · Rama: **`preview`**
-> CI (`.github/workflows/build.yml`): compila en push a `main` y `preview`; en `preview` publica pre-release `v<versión>-preview.<run>`.
-> Estado: **v2.9.4** (app 108 / módulo 358). Todo lo anterior está resuelto; solo se documenta lo vigente.
+> CI (`.github/workflows/build.yml`): compila en push a `main` y `preview`; en `preview` publica pre-release `v<versión>-preview.<run>`. El zip del módulo se llama `sdcard_bind_ui_con_app_v<versión>[-preview.<run>].zip`.
+> Estado: **v2.9.5** (app 109 / módulo 359). Todo lo anterior está resuelto; solo se documenta lo vigente.
 
 ## 1. Objetivo de estilo
 Estilo propio (no un clon) inspirado en una app de ajustes de audio (las capturas de referencia ya se borraron): título grande con acciones, cards muy redondeadas, tarjeta principal con interruptor y barra de navegación flotante en píldora. La funcionalidad no cambia. Sin gráficos decorativos de ecualizador, fuentes redondeadas y negrita en títulos, icono propio.
@@ -28,21 +28,23 @@ Estilo propio (no un clon) inspirado en una app de ajustes de audio (las captura
 - `ui/Fonts.kt`: familia con pesos reales. Fuente variable → un `Font` por peso con `variationSettings` (+ eje `ROND=100`); estática → 400 + hermanos `-Medium`/`-Bold`; sin archivo → familias del sistema por nombre. Fallback definitivo si algún día no se ve redonda: bundlear un `.ttf` (p. ej. Nunito) en `res/font/`.
 - `MainActivity.kt`:
   - Scaffold sin `bottomBar` ni FAB; `AppNavBar` → `UiNavBar` va en el `Box` raíz.
-  - Inicio (`HomePane`): header "Inicio" con ⓘ (Ajustes) y ⟳; `UiHeroCard` "Usar vínculos"; cards Almacenamiento (long-press refresca) y Vínculos (botón "Añadir vínculo").
+  - Inicio (`HomePane`): header "Inicio" sin acciones (refrescar = deslizar o mantener pulsada la card Almacenamiento); `UiHeroCard` "Usar vínculos"; cards Almacenamiento (long-press refresca) y Vínculos (botón "Añadir vínculo").
   - Interruptor: ON = `RootOps.saveAndApply(entries)`; OFF = `unmountAllNow()`; estado = `entries.any { status == "MOUNTED" }`. Sin SD/OTG o sin vínculos → snackbar.
   - Registro (`LogPane`): parsea `mount.log` (`YYYY-MM-DD HH:MM:SS mensaje`) en `LogLine` con nivel (`logLevelOf`) y etiqueta (`logTagOf`) por palabras clave; **si cambian los mensajes del módulo hay que ajustarlas**. Buscador, filtro por nivel, compartir/borrar, botones ir al inicio/final.
   - Anillo de almacenamiento: `CircularProgressIndicator` plano; solo anima el llenado 0→valor (`tween(2200, EaseInOutCubic)`).
   - `PullRefresh` (`PullToRefreshBox`) en Inicio y Registro.
   - `AppLogo` usa `R.drawable.app_logo` (`drawable-nodpi/app_logo.png`), **no** `R.mipmap.ic_launcher` (adaptive-icon que Compose rechaza). Si cambias el icono, copia también ese PNG.
-- Icono: adaptativo (`mipmap-anydpi-v26/ic_launcher.xml` → `ic_launcher_foreground.png` reducido ~52 % + `ic_launcher_background.png` `#252B69`). Con `minSdk 26` no hacen falta PNG de launcher ni icono redondo. El logo de Ajustes es `drawable-nodpi/app_logo.png` (**no** `R.mipmap.ic_launcher`: Compose rechaza el adaptive-icon); `module/icon.png` es el mismo arte (lo usa el README). Si cambias el icono, actualiza esos 4 archivos.
+- Icono: adaptativo (`mipmap-anydpi-v26/ic_launcher.xml` → `ic_launcher_foreground.png` reducido ~52 % + `ic_launcher_background.png` `#252B69`). La cadena va **sin sombra larga**: fondo plano `#252B69` en todos los PNG. Con `minSdk 26` no hacen falta PNG de launcher ni icono redondo. El logo de Ajustes es `drawable-nodpi/app_logo.png` (**no** `R.mipmap.ic_launcher`: Compose rechaza el adaptive-icon); `module/icon.png` es el mismo arte (lo usa el README). Si cambias el icono, actualiza esos 4 archivos.
 - Actualizaciones (Ajustes): `Updater.kt` (red, semver, instalación), `UpdateController.kt` (estado), `UpdatesCard.kt` (UI).
   - Automático: al abrir la app (`onForeground`) y cada 30 min en primer plano (`autoCheck`, mín. 10 min entre búsquedas) → `GET /repos/<repo>/releases?per_page=30`, elige la versión más alta (incluye pre-releases) con asset `.apk`/`.zip`. Si es más nueva, **descarga y verifica** el APK (paquete; la firma la valida `pm`) y la tarjeta pasa a `AppPhase.Ready`: **verde** + botón "Instalar actualización" que solo confirma (`installReady()`: `pm install -r` vía root en proceso desligado que relanza la app; guarda `updated_to` y al reabrir sale verde "App actualizada"). Sin actualización no hay botón. Los fallos de la búsqueda automática son silenciosos.
   - Deslizar en Ajustes (`PullRefreshAwait` → `UpdateController.refresh()`): repite la búsqueda al momento, con mensajes ("Ya estás al día", errores). El APK ya descargado se reutiliza (`ready_version` en prefs + `cacheDir/sdbind_update.apk`).
   - Si la versión de la app ≠ la de `module.prop` (o `/data/adb/modules_update/<id>/`) la tarjeta pasa a ámbar con "Descargar y flashear módulo" (si a la vez hay una actualización lista, manda el verde y el botón de flashear espera a que se instale) (`Updater.openForFlash`).
   - Semver: la final > sus pre-releases (`2.9.3` > `2.9.3-preview.99`); `compareBase`/`sameVersion` comparan solo números (módulo sin sufijo), `sameBuild` la build exacta.
-  - `versionName = "2.9.4$buildSuffix"`; el CI pasa `-PbuildSuffix="-preview.<run>"`. **No pongas el sufijo a mano.**
+  - `versionName = "2.9.5$buildSuffix"`; el CI pasa `-PbuildSuffix="-preview.<run>"`. **No pongas el sufijo a mano.**
   - Gotcha: tras instalar una **final** (`main`), las pre-releases de esa misma versión dejan de ofrecerse; sube versión (app y módulo a la vez) antes de seguir en `preview`.
   - Limitación: la actualización de la app requiere root y la misma firma; sin root no hay instalador de respaldo.
+  - Zip del módulo ("Descargar y flashear módulo"): `Updater.downloadModule` lo guarda en caché y en `Download/` con el nombre versionado del asset (`sdcard_bind_ui_con_app_v<versión>.zip`) y borra antes las versiones antiguas (`sdcard_bind_ui.zip`, `sdcard_bind_ui_con_app_v*.zip`).
+- Barra de navegación: pestañas Inicio (`Home`), Registro (`Notes`) y la tercera (etiqueta "Ajustes") con icono `Info`.
 - Sin cambios: `RootOps.kt`, selector de carpetas, explorador.
 
 ## 4. Pendiente opcional
@@ -55,18 +57,19 @@ Estilo propio (no un clon) inspirado en una app de ajustes de audio (las captura
 - Lógica root nueva solo en `RootOps.kt`, nunca en composables.
 - Si cambias algo funcional, sube versión en `app/build.gradle.kts` **y** `module/module.prop` a la vez.
 - No usar nombres, textos ni gráficos de la app de referencia.
+- El zip de entrega del proyecto se llama `sdbind_project_v<versión>.zip` (versión de `module.prop`).
 - Aviso de uso: avisar al usuario al acercarse al 90 % del uso gratuito; si una tarea queda a medias, documentar qué se hizo y qué falta en `docs/prompt_siguiente_chat.md` y aquí.
 
 ## 6. Comandos Termux
 Una línea por comando; el zip no trae carpeta raíz y se extrae encima conservando `.git`.
 
 ```bash
-cd /storage/emulated/0/Download && unzip -o sdbind_project.zip -d sdbind_project
+cd /storage/emulated/0/Download && unzip -o sdbind_project_v2.9.5.zip -d sdbind_project
 cd sdbind_project
 git add -A
-git commit -m "feat: búsqueda automática de actualizaciones; tarjeta verde con botón solo para confirmar la instalación; deslizar en Ajustes refresca (v2.9.4)"
+git commit -m "feat: quita ⓘ y ⟳ de la topbar de Inicio, icono Info en la píldora, icono sin sombra y zips con versión en el nombre (v2.9.5)"
 git push origin preview
 cinotif
 ```
 
-No hay archivos que borrar (`rm`) en esta entrega: no se elimina ni renombra ningún archivo.
+No hay archivos que borrar (`rm`) en esta entrega: no se elimina ni renombra ningún archivo del proyecto.
