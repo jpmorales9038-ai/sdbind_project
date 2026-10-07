@@ -87,6 +87,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.sdcardbind.manager.ui.AppTheme
+import com.sdcardbind.manager.ui.UiBottomFade
 import com.sdcardbind.manager.ui.UiCard
 import com.sdcardbind.manager.ui.UiHeader
 import com.sdcardbind.manager.ui.UiHeroCard
@@ -479,7 +480,14 @@ fun BindApp() {
         }
         }
     }
-    // Barra flotante flotante: superpuesta al contenido, centrada abajo.
+    // Difuminado inferior (detrás de la barra flotante y de la zona de gestos).
+    AnimatedVisibility(
+        visible = showChrome,
+        modifier = Modifier.align(Alignment.BottomCenter),
+        enter = fadeIn(fadeInSpec),
+        exit = fadeOut(fadeOutSpec)
+    ) { UiBottomFade() }
+    // Barra flotante: superpuesta al contenido, centrada abajo.
     AnimatedVisibility(
         visible = showChrome,
         modifier = Modifier.align(Alignment.BottomCenter),
@@ -825,7 +833,7 @@ private fun StorageCell(
         if (empty) {
             Text(stringResource(R.string.no_drive), color = cs.onSurfaceVariant, fontSize = 13.sp)
         } else {
-            Text(stringResource(R.string.free_fmt, vol.availHuman), color = cs.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.free_fmt, vol.availHuman), color = cs.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text("${vol.usedHuman} / ${vol.totalHuman}", color = cs.onSurfaceVariant, fontSize = 11.sp)
         }
     }
@@ -927,7 +935,7 @@ private fun BindCard(entry: MountEntry, onDelete: () -> Unit, onOpen: () -> Unit
     ) {
         Box(
             Modifier
-                .size(52.dp)
+                .size(48.dp)
                 .clip(iconShape)
                 .background(if (isMounted) cs.primaryContainer else cs.primaryContainer.copy(alpha = 0.35f))
                 .then(
@@ -984,78 +992,12 @@ private fun StatusChip(status: String) {
     )
 }
 
+/** Logo estático de la app (fondo + primer plano del icono launcher). */
 @Composable
-private fun AppMark(modifier: Modifier = Modifier) {
-    val cs = MaterialTheme.colorScheme
-    val inf = rememberInfiniteTransition(label = "appMark")
-    val rot by inf.animateFloat(
-        0f, 360f,
-        infiniteRepeatable(tween(8000, easing = LinearEasing), RepeatMode.Restart),
-        label = "rot"
-    )
-    val rot2 by inf.animateFloat(
-        360f, 0f,
-        infiniteRepeatable(tween(11000, easing = LinearEasing), RepeatMode.Restart),
-        label = "rot2"
-    )
-    val sweep by inf.animateFloat(
-        0.42f, 0.86f,
-        infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "sweep"
-    )
-    val pulse by inf.animateFloat(
-        0.94f, 1.06f,
-        infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "pulse"
-    )
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val stroke = size.minDimension * 0.085f
-            val pad = stroke * 0.9f
-            drawArc(
-                color = cs.primary.copy(alpha = 0.18f),
-                startAngle = 0f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = Offset(pad, pad),
-                size = Size(size.width - pad * 2, size.height - pad * 2),
-                style = Stroke(stroke, cap = StrokeCap.Round)
-            )
-            drawArc(
-                color = cs.primary,
-                startAngle = -90f + rot,
-                sweepAngle = 360f * sweep,
-                useCenter = false,
-                topLeft = Offset(pad, pad),
-                size = Size(size.width - pad * 2, size.height - pad * 2),
-                style = Stroke(stroke, cap = StrokeCap.Round)
-            )
-            val inner = pad * 2.35f
-            drawArc(
-                color = cs.tertiary,
-                startAngle = 90f + rot2,
-                sweepAngle = 220f * sweep,
-                useCenter = false,
-                topLeft = Offset(inner, inner),
-                size = Size(size.width - inner * 2, size.height - inner * 2),
-                style = Stroke(stroke * 0.72f, cap = StrokeCap.Round)
-            )
-        }
-        Box(
-            Modifier
-                .fillMaxSize(0.42f)
-                .graphicsLayer { scaleX = pulse; scaleY = pulse }
-                .clip(RoundedCornerShape(32))
-                .background(cs.primary),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Filled.Link,
-                contentDescription = null,
-                tint = cs.onPrimary,
-                modifier = Modifier.fillMaxSize(0.55f)
-            )
-        }
+private fun AppLogo(modifier: Modifier = Modifier) {
+    Box(modifier.clip(RoundedCornerShape(28.dp))) {
+        Image(painterResource(R.mipmap.ic_launcher_background), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        Image(painterResource(R.mipmap.ic_launcher_foreground), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
     }
 }
 
@@ -1069,16 +1011,16 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull() ?: "2.5.1"
     }
-    val iconDp = (minOf(cfg.screenWidthDp, cfg.screenHeightDp) * 0.32f).coerceIn(104f, 176f).dp
+    val iconDp = (minOf(cfg.screenWidthDp, cfg.screenHeightDp) * 0.28f).coerceIn(88f, 132f).dp
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         UiHeader(stringResource(R.string.tab_settings))
         Column(Modifier.padding(horizontal = UiScreenPadding)) {
             UiCard(icon = Icons.Filled.Info, title = stringResource(R.string.about)) {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    AppMark(Modifier.size(iconDp))
+                    AppLogo(Modifier.size(iconDp))
                     Spacer(Modifier.height(16.dp))
-                    Text("SD Bind", color = cs.onSurface, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    Text(stringResource(R.string.version_fmt, ver ?: "2.5.4"), color = cs.onSurfaceVariant, fontSize = 14.sp)
+                    Text("SD Bind", color = cs.onSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.version_fmt, ver ?: "2.5.4"), color = cs.onSurfaceVariant, fontSize = 13.sp)
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -1087,7 +1029,7 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
                     Text(
                         stringResource(R.string.updates_desc),
                         color = cs.onSurfaceVariant,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(12.dp))
@@ -1156,7 +1098,7 @@ private fun AboutMiniCard(modifier: Modifier, icon: ImageVector, title: String, 
             Icon(icon, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(12.dp))
-        Text(title, color = cs.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(title, color = cs.onSurface, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(4.dp))
         Text(body, color = cs.onSurfaceVariant, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
     }

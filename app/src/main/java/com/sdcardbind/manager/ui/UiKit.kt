@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -76,8 +79,8 @@ fun UiHeader(
         Text(
             title,
             color = cs.onBackground,
-            fontSize = 36.sp,
-            lineHeight = 44.sp,
+            fontSize = 28.sp,
+            lineHeight = 34.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -107,13 +110,13 @@ fun UiCard(
         if (title != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
-                    Icon(icon, null, tint = cs.primary, modifier = Modifier.size(26.dp))
+                    Icon(icon, null, tint = cs.primary, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(12.dp))
                 }
                 Text(
                     title,
                     color = cs.onSurface,
-                    fontSize = 22.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -130,7 +133,7 @@ fun UiCard(
 fun uiInnerColor(): Color = MaterialTheme.colorScheme.surfaceContainerHighest
 
 /**
- * Card principal de Inicio: fondo en degradado suave con título, estado e interruptor
+ * Card principal de Inicio: fondo sólido con título, estado e interruptor
  * (con ✕ / ✓ dentro del pulgar).
  */
 @Composable
@@ -143,31 +146,30 @@ fun UiHeroCard(
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
-    val gradient = Brush.linearGradient(listOf(cs.secondaryContainer, cs.tertiaryContainer))
     Row(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(UiCardRadius))
-            .background(gradient)
+            .background(cs.secondaryContainer)
             .toggleable(
                 value = checked,
                 enabled = enabled,
                 role = Role.Switch,
                 onValueChange = onCheckedChange
             )
-            .padding(horizontal = 24.dp, vertical = 28.dp),
+            .padding(horizontal = 24.dp, vertical = 22.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
             Text(
                 title,
                 color = cs.onSecondaryContainer,
-                fontSize = 26.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(subtitle, color = cs.onSecondaryContainer.copy(alpha = 0.75f), fontSize = 16.sp)
+            Text(subtitle, color = cs.onSecondaryContainer.copy(alpha = 0.75f), fontSize = 14.sp)
         }
         Spacer(Modifier.width(12.dp))
         Switch(
@@ -213,15 +215,15 @@ fun UiNavBar(
             val fg by animateColorAsState(if (sel) cs.onPrimary else cs.onSecondaryContainer, label = "navFg")
             Row(
                 Modifier
-                    .height(56.dp)
+                    .height(52.dp)
                     .clip(CircleShape)
                     .background(bg)
                     .selectable(selected = sel, role = Role.Tab, onClick = { onSelect(i) })
-                    .padding(horizontal = if (sel) 24.dp else 20.dp)
+                    .padding(horizontal = if (sel) 20.dp else 16.dp)
                     .animateContentSize(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(item.icon, contentDescription = if (sel) null else item.label, tint = fg, modifier = Modifier.size(28.dp))
+                Icon(item.icon, contentDescription = if (sel) null else item.label, tint = fg, modifier = Modifier.size(24.dp))
                 AnimatedVisibility(
                     visible = sel,
                     enter = expandHorizontally() + fadeIn(),
@@ -230,13 +232,35 @@ fun UiNavBar(
                     Text(
                         item.label,
                         color = fg,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
-                        modifier = Modifier.padding(start = 10.dp)
+                        modifier = Modifier.padding(start = 8.dp)
                     )
                 }
             }
         }
     }
+}
+
+/**
+ * Difuminado inferior: el contenido se funde con el fondo detrás de la barra flotante y de la
+ * zona de la barra de gestos, para que no se vea cortado.
+ */
+@Composable
+fun UiBottomFade(modifier: Modifier = Modifier) {
+    val bg = MaterialTheme.colorScheme.background
+    val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(inset + 128.dp)
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    0.55f to bg.copy(alpha = 0.85f),
+                    1f to bg
+                )
+            )
+    )
 }

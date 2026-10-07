@@ -78,7 +78,12 @@ private fun findFontFile(): File? {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 fun roundedTypography(font: FontFamily): Typography {
     val b = Typography()
-    fun TextStyle.r() = copy(fontFamily = font)
+    // Escala global 0.9: los tamaños base de Material resultaban grandes en esta app.
+    fun TextStyle.r() = copy(
+        fontFamily = font,
+        fontSize = fontSize * 0.9f,
+        lineHeight = lineHeight * 0.9f
+    )
     return Typography(
         displayLarge = b.displayLarge.r(),
         displayMedium = b.displayMedium.r(),
