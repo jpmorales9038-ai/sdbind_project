@@ -1,11 +1,6 @@
 package com.sdcardbind.manager
 
-import android.content.ClipData
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import androidx.core.content.FileProvider
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -31,6 +26,9 @@ data class ReleaseInfo(
 
 enum class FetchError { Network, NoReleases, Other }
 
+/** Resultado de flashear el módulo desde la propia app. */
+enum class FlashResult { Ok, NoInstaller, Failed }
+
 sealed class FetchResult {
     data class Ok(val release: ReleaseInfo) : FetchResult()
     data class Failed(val kind: FetchError, val detail: String? = null) : FetchResult()
@@ -42,7 +40,7 @@ data class ModuleInfo(val version: String, val pendingReboot: Boolean)
 object Updater {
 
     const val DEFAULT_REPO = "jpmorales9038-ai/sdbind_project"
-    // Nombre base del zip del módulo (el asset de la release lleva la versión: ..._v2.9.5.zip).
+    // Nombre base del zip del módulo (el asset de la release lleva la versión: ..._v2.9.6.zip).
     private const val ZIP_NAME = "sdcard_bind_ui.zip"
     private const val ZIP_GLOB = "sdcard_bind_ui_con_app_v*.zip"
     private const val DOWNLOAD_DIR = "/storage/emulated/0/Download"
@@ -50,16 +48,10 @@ object Updater {
     private const val APK_IN_ZIP = "sdcard-bind-manager.apk"
     private const val TMP_APK = "/data/local/tmp/sdbind_update.apk"
     private const val TMP_LOG = "/data/local/tmp/sdbind_install.log"
-
-    private val managers = listOf(
-        "com.rifsxd.ksunext" to "com.rifsxd.ksunext.ui.MainActivity",
-        "me.weishu.kernelsu" to "me.weishu.kernelsu.ui.MainActivity",
-        "com.sukisu.ultra" to "com.sukisu.ultra.ui.MainActivity",
-        "com.topjohnwu.magisk" to "com.topjohnwu.magisk.ui.MainActivity",
-        "io.github.huskydg.magisk" to "com.topjohnwu.magisk.ui.MainActivity",
-        "me.bmax.apatch" to "me.bmax.apatch.ui.MainActivity"
-    )
-
+    private const val TMP_ZIP = "/data/local/tmp/sdbind_module.zip"
+    private const val FLASH_LOG = "/data/local/tmp/sdbind_flash.log"
+    private const val FLASH_EXIT = "SDBIND_EXIT="
+    private val ANSI = Regex("\u001B\\[[0-9;]*[A-Za-z]")
 
     // ---------------------------------------------------------------- versiones
 
@@ -311,7 +303,7 @@ object Updater {
 
     // ---------------------------------------------------------------- descarga del módulo
 
-    /** Nombre del zip con la versión, el mismo del asset de la release (sdcard_bind_ui_con_app_v2.9.5.zip). */
+    /** Nombre del zip con la versión, el mismo del asset de la release (sdcard_bind_ui_con_app_v2.9.6.zip). */
     private fun moduleZipName(rel: ReleaseInfo): String {
         val raw = rel.zipUrl?.substringBefore('?')?.substringAfterLast('/').orEmpty()
         val clean = raw.replace(Regex("[^A-Za-z0-9._-]"), "_")
@@ -341,65 +333,60 @@ object Updater {
         dest
     }
 
-    fun openForFlash(context: Context, zip: File) {
-        val cache = context.cacheDir.canonicalPath
-        val named = if (zip.canonicalPath.startsWith(cache)) zip else {
-            File(context.cacheDir, zip.name).also { zip.copyTo(it, overwrite = true) }
-        }
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            named
-        )
-        val grant = Intent.FLAG_GRANT_READ_URI_PERMISSION
-        managers.forEach { (pkg, _) ->
-            runCatching { context.grantUriPermission(pkg, uri, grant) }
-        }
+    // ---------------------------------------------------------------- flasheo del módulo desde la app
 
-        for ((pkg, cls) in managers) {
-            if (!installed(context, pkg)) continue
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                component = ComponentName(pkg, cls)
-                setDataAndType(uri, "application/zip")
-                putExtra(Intent.EXTRA_STREAM, uri)
-                clipData = ClipData.newUri(context.contentResolver, named.name, uri)
-                addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        grant
-                )
-            }
-            runCatching {
-                context.startActivity(intent)
-                return
-            }
-        }
-
-        val view = Intent(Intent.ACTION_SEND).apply {
-            type = "application/zip"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            clipData = ClipData.newUri(context.contentResolver, named.name, uri)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or grant)
-        }
-        val skip = listOf("anykernel", "kernelflasher", "kernel flasher", "exkm", "franco")
-        val pm = context.packageManager
-        val matches = pm.queryIntentActivities(view, PackageManager.MATCH_DEFAULT_ONLY)
-            .filter { ri ->
-                val label = (ri.activityInfo.packageName + " " + ri.loadLabel(pm)).lowercase()
-                skip.none { it in label }
-            }
-        matches.forEach { ri ->
-            context.grantUriPermission(ri.activityInfo.packageName, uri, grant)
-        }
-        val chooser = Intent.createChooser(view, context.getString(R.string.flash_with)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or grant)
-            putExtra(Intent.EXTRA_TITLE, context.getString(R.string.flash_with))
-        }
-        context.startActivity(chooser)
+    /** Ruta de un ejecutable de root (ksud/apd/magisk): primero rutas conocidas, luego el PATH. */
+    private fun findTool(name: String, vararg known: String): String? {
+        for (p in known) if (Shell.cmd("[ -x ${shQuote(p)} ]").exec().isSuccess) return p
+        return Shell.cmd("command -v $name").exec().out.firstOrNull()?.trim()?.takeIf { it.startsWith("/") }
     }
 
-    private fun installed(context: Context, pkg: String): Boolean =
-        runCatching { context.packageManager.getPackageInfo(pkg, 0); true }.getOrDefault(false)
+    /** Comando que instala [zip] con el instalador de módulos que haya (KernelSU, APatch o Magisk). */
+    private fun installerCommand(zip: String): String? {
+        findTool("ksud", "/data/adb/ksud", "/data/adb/ksu/bin/ksud")?.let { return "${shQuote(it)} module install $zip" }
+        findTool("apd", "/data/adb/apd", "/data/adb/ap/bin/apd")?.let { return "${shQuote(it)} module install $zip" }
+        findTool("magisk", "/data/adb/magisk/magisk")?.let { return "${shQuote(it)} --install-module $zip" }
+        return null
+    }
+
+    /**
+     * Flashea el zip del módulo sin abrir ningún gestor: llama al instalador de root (ksud / apd /
+     * magisk) en un proceso desligado, porque el `customize.sh` del módulo hace `pm install -r` de
+     * la app y el sistema mata este proceso. El script relanza la app al terminar. Mientras tanto
+     * se lee el log del instalador y se pasa a [onLog] (últimas líneas). Si el proceso muere a
+     * medias, al reabrir la app el módulo aparece como "pendiente de reinicio".
+     */
+    suspend fun flashModuleZip(context: Context, zip: File, onLog: (List<String>) -> Unit): FlashResult {
+        val cmd = withContext(Dispatchers.IO) { installerCommand(TMP_ZIP) } ?: return FlashResult.NoInstaller
+        val launch = "${context.packageName}/${MainActivity::class.java.name}"
+        withContext(Dispatchers.IO) {
+            Shell.cmd("rm -f $FLASH_LOG; cp ${shQuote(zip.absolutePath)} $TMP_ZIP && chmod 644 $TMP_ZIP").exec()
+            val script = "{ $cmd; echo $FLASH_EXIT\$?; } > $FLASH_LOG 2>&1; rm -f $TMP_ZIP; " +
+                "am start --user 0 -n $launch >/dev/null 2>&1"
+            Shell.cmd(
+                "S=''; command -v setsid >/dev/null 2>&1 && S=setsid; " +
+                    "nohup \$S sh -c ${shQuote(script)} >/dev/null 2>&1 &"
+            ).exec()
+        }
+        var shown = emptyList<String>()
+        for (i in 0 until 300) { // hasta ~2,5 min
+            delay(500)
+            val lines = withContext(Dispatchers.IO) { Shell.cmd("cat $FLASH_LOG 2>/dev/null").exec().out }
+            val text = lines.filterNot { it.startsWith(FLASH_EXIT) }
+                .map { ANSI.replace(it, "").trim() }
+                .filter { it.isNotEmpty() }
+                .takeLast(6)
+            if (text != shown) {
+                shown = text
+                onLog(text)
+            }
+            val exit = lines.firstOrNull { it.startsWith(FLASH_EXIT) }
+            if (exit != null) {
+                return if (exit.substringAfter('=').trim() == "0") FlashResult.Ok else FlashResult.Failed
+            }
+        }
+        return FlashResult.Failed
+    }
 
     private fun findAsset(json: JSONObject, accept: (String) -> Boolean): String? {
         val assets = json.optJSONArray("assets") ?: return null

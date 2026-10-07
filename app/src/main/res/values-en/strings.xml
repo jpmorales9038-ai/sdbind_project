@@ -16,8 +16,6 @@
     <string name="mounted_in">Mounted at %1$s</string>
     <string name="mount_error">Couldn’t mount. Check the log</string>
     <string name="checking_updates">Checking for updates…</string>
-    <string name="update_ready">%1$s downloaded. Choose an app to flash it.</string>
-    <string name="update_saved_downloads">Saved to Download</string>
     <string name="binds_applied">Binds applied</string>
     <string name="mount_failed">Couldn’t mount</string>
     <string name="auto_unmounted">Unmounted (drive removed)</string>
@@ -89,7 +87,6 @@
     <string name="up_one_level">Up one level</string>
     <string name="no_subfolders">No subfolders. You can use this one.</string>
     <string name="pick_inner_folder">Pick an inner folder, not storage root.</string>
-    <string name="flash_with">Flash the module with</string>
     <string name="update_no_github">Couldn’t reach GitHub</string>
     <string name="update_no_releases">No releases yet. Push this code to GitHub and wait for Actions to publish one.</string>
     <string name="update_up_to_date">You’re up to date (%1$s)</string>
@@ -129,4 +126,7 @@
     <string name="upd_module_downloading">Downloading the module…</string>
     <string name="upd_mismatch_body">The app version (%1$s) and the module version (%2$s) don’t match.</string>
     <string name="upd_pending_reboot">Module %1$s is already flashed. Reboot the phone to apply it.</string>
+    <string name="upd_module_flashing">Flashing the module…</string>
+    <string name="upd_module_no_installer">No rooted KernelSU, APatch or Magisk found to install the module</string>
+    <string name="upd_module_flash_failed">Couldn’t flash the module. Check the log above</string>
 </resources>

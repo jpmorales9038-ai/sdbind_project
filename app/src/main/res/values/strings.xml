@@ -16,8 +16,6 @@
     <string name="mounted_in">Montado en %1$s</string>
     <string name="mount_error">Error al montar, mira el registro</string>
     <string name="checking_updates">Buscando actualizaciones…</string>
-    <string name="update_ready">%1$s descargada. Elige con qué flashearla.</string>
-    <string name="update_saved_downloads">Guardada en Descargas</string>
     <string name="binds_applied">Vínculos aplicados</string>
     <string name="mount_failed">Error al montar</string>
     <string name="auto_unmounted">Desmontado (se retiró la unidad)</string>
@@ -89,7 +87,6 @@
     <string name="up_one_level">Subir un nivel</string>
     <string name="no_subfolders">Sin subcarpetas. Puedes usar esta.</string>
     <string name="pick_inner_folder">Elige una carpeta interior, no la raíz del almacenamiento.</string>
-    <string name="flash_with">Flashear el módulo con</string>
     <string name="update_no_github">No se pudo hablar con GitHub</string>
     <string name="update_no_releases">Todavía no hay releases. Sube este código a GitHub y espera a que Actions publique uno.</string>
     <string name="update_up_to_date">Ya estás al día (%1$s)</string>
@@ -129,4 +126,7 @@
     <string name="upd_module_downloading">Descargando el módulo…</string>
     <string name="upd_mismatch_body">La versión de la app (%1$s) y la del módulo (%2$s) no coinciden.</string>
     <string name="upd_pending_reboot">El módulo %1$s ya está flasheado. Reinicia el teléfono para aplicarlo.</string>
+    <string name="upd_module_flashing">Flasheando el módulo…</string>
+    <string name="upd_module_no_installer">No se encontró KernelSU, APatch ni Magisk con root para instalar el módulo</string>
+    <string name="upd_module_flash_failed">No se pudo flashear el módulo. Revisa el registro de arriba</string>
 </resources>

@@ -438,7 +438,7 @@ fun BindApp() {
                     userScrollEnabled = true
                 ) { page ->
                     when (page) {
-                        1 -> LogPane(log, onClear = { clearLogNow() }, onRefresh = { refresh() })
+                        1 -> LogPane(log, landscape = landscape, onClear = { clearLogNow() }, onRefresh = { refresh() })
                         2 -> AboutPane(
                             updates = updates,
                             onInstallUpdate = { scope.launch { updates.installReady() } },
@@ -488,8 +488,9 @@ fun BindApp() {
         }
     }
     // Difuminado inferior (detrás de la barra flotante y de la zona de gestos).
+    // En apaisado no hay difuminado: la píldora va abajo a la izquierda y el registro ocupa toda la altura.
     AnimatedVisibility(
-        visible = showChrome,
+        visible = showChrome && !landscape,
         modifier = Modifier.align(Alignment.BottomCenter),
         enter = fadeIn(fadeInSpec),
         exit = fadeOut(fadeOutSpec)
@@ -497,14 +498,14 @@ fun BindApp() {
     // Barra flotante: superpuesta al contenido, centrada abajo.
     AnimatedVisibility(
         visible = showChrome,
-        modifier = Modifier.align(Alignment.BottomCenter),
+        modifier = Modifier.align(if (landscape) Alignment.BottomStart else Alignment.BottomCenter),
         enter = slideInVertically(slideSpec) { it } + fadeIn(fadeInSpec),
         exit = slideOutVertically(slideSpec) { it } + fadeOut(fadeOutSpec)
     ) {
         AppNavBar(
             selected = pagerState.currentPage,
             onTab = goTab,
-            modifier = Modifier.navigationBarsPadding().padding(bottom = 16.dp)
+            modifier = Modifier.navigationBarsPadding().padding(bottom = 16.dp, start = if (landscape) UiScreenPadding else 0.dp)
         )
     }
     OtgConnectPopup(vol = otgPopup, onDismiss = { otgPopup = null })
@@ -633,7 +634,7 @@ private fun AppNavBar(selected: Int, onTab: (Tab) -> Unit, modifier: Modifier = 
     val items = listOf(
         UiNavItem(stringResource(R.string.tab_home), Icons.Filled.Home),
         UiNavItem(stringResource(R.string.tab_log), Icons.Filled.Notes),
-        UiNavItem(stringResource(R.string.tab_settings), Icons.Filled.Info)
+        UiNavItem(stringResource(R.string.tab_settings), Icons.Filled.Settings)
     )
     UiNavBar(items = items, selected = selected, onSelect = { onTab(Tab.entries[it]) }, modifier = modifier)
 }
@@ -1226,8 +1227,9 @@ private fun LogRow(line: LogLine) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LogPane(log: String, onClear: () -> Unit, onRefresh: () -> Unit) {
+private fun LogPane(log: String, landscape: Boolean, onClear: () -> Unit, onRefresh: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1252,8 +1254,7 @@ private fun LogPane(log: String, onClear: () -> Unit, onRefresh: () -> Unit) {
     val firstShown by remember { derivedStateOf { listState.firstVisibleItemIndex } }
     val lastShown by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 } }
 
-    PullRefresh(onRefresh = onRefresh) {
-    Column(Modifier.fillMaxSize()) {
+    val header: @Composable () -> Unit = {
         UiHeader(stringResource(R.string.log)) {
             IconButton(onClick = {
                 scope.launch {
@@ -1267,6 +1268,8 @@ private fun LogPane(log: String, onClear: () -> Unit, onRefresh: () -> Unit) {
                 Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.clear_log))
             }
         }
+    }
+    val counter: @Composable () -> Unit = {
         Text(
             if (visible.isEmpty()) stringResource(R.string.log_lines_fmt, 0, 0, 0)
             else stringResource(R.string.log_lines_fmt, firstShown + 1, (lastShown + 1).coerceAtMost(visible.size), visible.size),
@@ -1275,10 +1278,11 @@ private fun LogPane(log: String, onClear: () -> Unit, onRefresh: () -> Unit) {
             fontSize = 13.sp,
             modifier = Modifier.padding(start = UiScreenPadding + 4.dp, bottom = 12.dp)
         )
-        // Buscador en píldora + botón de filtro por nivel
+    }
+    // Buscador en píldora (+ botón de filtro por nivel solo en vertical; en apaisado los chips van siempre visibles).
+    val search: @Composable (Modifier) -> Unit = { mod ->
         Row(
-            Modifier
-                .padding(horizontal = UiScreenPadding)
+            mod
                 .fillMaxWidth()
                 .clip(CircleShape)
                 .background(cs.surfaceContainerHigh)
@@ -1293,7 +1297,7 @@ private fun LogPane(log: String, onClear: () -> Unit, onRefresh: () -> Unit) {
                 singleLine = true,
                 textStyle = LocalTextStyle.current.merge(TextStyle(color = cs.onSurface, fontSize = 15.sp)),
                 cursorBrush = SolidColor(cs.primary),
-                modifier = Modifier.weight(1f).padding(vertical = 14.dp),
+                modifier = Modifier.weight(1f).padding(vertical = if (landscape) 10.dp else 14.dp),
                 decorationBox = { inner ->
                     Box {
                         if (query.isEmpty()) {
@@ -1306,46 +1310,26 @@ private fun LogPane(log: String, onClear: () -> Unit, onRefresh: () -> Unit) {
             if (query.isNotEmpty()) {
                 IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, null, tint = cs.onSurfaceVariant) }
             }
-            IconButton(onClick = { showFilters = !showFilters }) {
-                Icon(
-                    Icons.Filled.FilterList,
-                    contentDescription = null,
-                    tint = if (levelFilter != null) cs.primary else cs.onSurfaceVariant
-                )
-            }
-        }
-        AnimatedVisibility(showFilters) {
-            Row(
-                Modifier
-                    .padding(top = 12.dp)
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = UiScreenPadding),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val chips = listOf(
-                    null to R.string.log_filter_all,
-                    LogLevel.ERROR to R.string.log_filter_error,
-                    LogLevel.WARN to R.string.log_filter_warn,
-                    LogLevel.SUCCESS to R.string.log_filter_ok,
-                    LogLevel.INFO to R.string.log_filter_info
-                )
-                chips.forEach { (lvl, label) ->
-                    FilterChip(
-                        selected = levelFilter == lvl,
-                        onClick = { levelFilter = lvl },
-                        label = { Text(stringResource(label)) }
+            if (!landscape) {
+                IconButton(onClick = { showFilters = !showFilters }) {
+                    Icon(
+                        Icons.Filled.FilterList,
+                        contentDescription = null,
+                        tint = if (levelFilter != null) cs.primary else cs.onSurfaceVariant
                     )
                 }
             }
         }
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(start = UiScreenPadding, end = UiScreenPadding, top = 12.dp, bottom = UiNavClearance)
-                .clip(RoundedCornerShape(28.dp))
-                .background(cs.surfaceContainerLowest)
-        ) {
+    }
+    val chips = listOf(
+        null to R.string.log_filter_all,
+        LogLevel.ERROR to R.string.log_filter_error,
+        LogLevel.WARN to R.string.log_filter_warn,
+        LogLevel.SUCCESS to R.string.log_filter_ok,
+        LogLevel.INFO to R.string.log_filter_info
+    )
+    val logBox: @Composable (Modifier) -> Unit = { mod ->
+        Box(mod.clip(RoundedCornerShape(28.dp)).background(cs.surfaceContainerLowest)) {
             if (visible.isEmpty()) {
                 Text(
                     stringResource(if (all.isEmpty()) R.string.log_empty else R.string.log_no_results),
@@ -1372,6 +1356,65 @@ private fun LogPane(log: String, onClear: () -> Unit, onRefresh: () -> Unit) {
                     contentColor = cs.onSecondaryContainer
                 ) { Icon(Icons.Filled.VerticalAlignBottom, contentDescription = stringResource(R.string.log_scroll_bottom)) }
             }
+        }
+    }
+
+    PullRefresh(onRefresh = onRefresh) {
+    if (landscape) {
+        // Apaisado: controles a la izquierda (con la píldora de navegación debajo) y el registro
+        // a toda la altura a la derecha, sin la franja de 120 dp que lo recortaba.
+        Row(Modifier.fillMaxSize().padding(horizontal = UiScreenPadding)) {
+            Column(
+                Modifier.weight(0.36f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(end = 8.dp)
+            ) {
+                header()
+                counter()
+                search(Modifier)
+                Spacer(Modifier.height(12.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    chips.forEach { (lvl, label) ->
+                        FilterChip(
+                            selected = levelFilter == lvl,
+                            onClick = { levelFilter = lvl },
+                            label = { Text(stringResource(label)) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(UiNavClearance))
+            }
+            logBox(Modifier.weight(0.64f).fillMaxHeight().padding(start = 8.dp, top = 12.dp, bottom = 12.dp))
+        }
+    } else {
+        Column(Modifier.fillMaxSize()) {
+            header()
+            counter()
+            search(Modifier.padding(horizontal = UiScreenPadding))
+            AnimatedVisibility(showFilters) {
+                Row(
+                    Modifier
+                        .padding(top = 12.dp)
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = UiScreenPadding),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    chips.forEach { (lvl, label) ->
+                        FilterChip(
+                            selected = levelFilter == lvl,
+                            onClick = { levelFilter = lvl },
+                            label = { Text(stringResource(label)) }
+                        )
+                    }
+                }
+            }
+            logBox(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(start = UiScreenPadding, end = UiScreenPadding, top = 12.dp, bottom = UiNavClearance)
+            )
         }
     }
     }

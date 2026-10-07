@@ -31,7 +31,7 @@ sealed interface ModuleStatus {
  * - Al sustituirse el APK el sistema mata este proceso, así que antes se guarda una marca
  *   ([KEY_UPDATED]) y, al reabrir, la tarjeta se muestra en verde una vez.
  * - En cada apertura (ON_START) se compara la versión de la app con la del módulo; si no coinciden
- *   la tarjeta pasa a ámbar y ofrece descargar y flashear el módulo.
+ *   la tarjeta pasa a ámbar y ofrece descargar y flashear el módulo desde la propia app.
  */
 class UpdateController(private val context: Context) {
 
@@ -53,6 +53,9 @@ class UpdateController(private val context: Context) {
     var module by mutableStateOf<ModuleStatus>(ModuleStatus.Unknown)
         private set
     var moduleBusy by mutableStateOf(false)
+        private set
+    /** Últimas líneas del instalador mientras se flashea el módulo (vacío si no se está flasheando). */
+    var flashLines by mutableStateOf<List<String>>(emptyList())
         private set
     /** Versión descargada y lista para instalar (solo con [AppPhase.Ready]). */
     var readyVersion by mutableStateOf<String?>(null)
@@ -152,8 +155,14 @@ class UpdateController(private val context: Context) {
             release = rel
             if (!Updater.isNewer(rel.version, appVersion)) {
                 if (manual && !wasReady) {
-                    setMsg(R.string.update_up_to_date, Updater.displayFull(appVersion))
-                    phase = AppPhase.UpToDate
+                    // Si el módulo hay que actualizarlo (o reiniciar) no se dice "al día".
+                    if (module is ModuleStatus.Mismatch || module is ModuleStatus.PendingReboot) {
+                        phase = AppPhase.Idle
+                        setMsg(null)
+                    } else {
+                        setMsg(R.string.update_up_to_date, Updater.displayFull(appVersion))
+                        phase = AppPhase.UpToDate
+                    }
                 }
                 return
             }
@@ -233,10 +242,11 @@ class UpdateController(private val context: Context) {
         }
     }
 
-    /** Descarga el zip del módulo y lo abre en el gestor de root para flashearlo. */
+    /** Descarga el zip del módulo y lo flashea desde la propia app (sin gestor de módulos). */
     suspend fun flashModule() {
         if (busy || moduleBusy) return
         moduleBusy = true
+        flashLines = emptyList()
         try {
             setMsg(R.string.upd_module_downloading)
             val rel = release ?: (Updater.fetchLatest() as? FetchResult.Ok)?.release
@@ -254,9 +264,21 @@ class UpdateController(private val context: Context) {
                 setMsg(R.string.upd_download_failed)
                 return
             }
-            setMsg(R.string.update_ready, rel.tag)
-            runCatching { Updater.openForFlash(context, zip) }
-                .onFailure { setMsg(R.string.update_saved_downloads) }
+            setMsg(R.string.upd_module_flashing)
+            when (Updater.flashModuleZip(context, zip) { flashLines = it }) {
+                FlashResult.Ok -> {
+                    flashLines = emptyList()
+                    val info = Updater.readModuleInfo()
+                    refreshModule()
+                    if (info != null && info.pendingReboot) {
+                        setMsg(R.string.upd_pending_reboot, Updater.displayVersion(info.version))
+                    } else {
+                        setMsg(null)
+                    }
+                }
+                FlashResult.NoInstaller -> setMsg(R.string.upd_module_no_installer)
+                FlashResult.Failed -> setMsg(R.string.upd_module_flash_failed)
+            }
         } finally {
             moduleBusy = false
         }
