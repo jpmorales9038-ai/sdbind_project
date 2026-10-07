@@ -65,6 +65,8 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -1022,10 +1024,10 @@ private fun StatusChip(status: String) {
     )
 }
 
-/** Logo estático de la app: el mismo icono del launcher, tal cual. */
+/** Logo estático de la app: el mismo icono del launcher (PNG en drawable-nodpi; painterResource no admite el XML adaptativo). */
 @Composable
 private fun AppLogo(modifier: Modifier = Modifier) {
-    Image(painterResource(R.mipmap.ic_launcher), contentDescription = null, modifier = modifier)
+    Image(painterResource(R.drawable.app_logo), contentDescription = null, modifier = modifier)
 }
 
 @Composable
@@ -1192,9 +1194,12 @@ private fun LogRow(line: LogLine) {
             LogTag.SYSTEM -> R.string.tag_system
         }
     )
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-        Box(Modifier.width(4.dp).fillMaxHeight().background(color))
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 7.dp)) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind { drawRect(color, size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height)) }
+    ) {
+        Column(Modifier.weight(1f).padding(start = 16.dp, end = 12.dp, top = 7.dp, bottom = 7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(20.dp).clip(RoundedCornerShape(7.dp)).background(color.copy(alpha = 0.2f)),
@@ -1296,7 +1301,7 @@ private fun LogPane(log: String, onClear: () -> Unit, onRefresh: () -> Unit) {
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,
-                textStyle = TextStyle(color = cs.onSurface, fontSize = 15.sp),
+                textStyle = LocalTextStyle.current.merge(TextStyle(color = cs.onSurface, fontSize = 15.sp)),
                 cursorBrush = SolidColor(cs.primary),
                 modifier = Modifier.weight(1f).padding(vertical = 14.dp),
                 decorationBox = { inner ->

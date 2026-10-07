@@ -65,6 +65,18 @@ Decisiones del usuario (ya aplicadas):
 - Pendiente de validar en el teléfono: icono en el launcher (también tema monocromo/redondo), difuminado sobre la barra de gestos, tamaños de texto; barra de estado al cambiar claro/oscuro con la app abierta; negrita en títulos;
   que la barra flotante no tape el último elemento en pantallas pequeñas/horizontal.
 
+### Revisión v2.9.1 (cierre en Registro / Ajustes)
+- **Ajustes se cerraba**: `AppLogo` usaba `painterResource(R.mipmap.ic_launcher)`, que en API 26+ resuelve al XML
+  `adaptive-icon` y Compose lo rechaza (excepción). Ahora usa `R.drawable.app_logo` (`res/drawable-nodpi/app_logo.png`,
+  copia de `mipmap-xxhdpi/ic_launcher.png`). **Si cambias el icono del launcher, copia también ese PNG.**
+- **Registro**: no se halló una causa determinista por lectura del código (strings y formatos de los 3 idiomas están bien).
+  Se quitó `IntrinsicSize.Min` de `LogRow` (barra lateral con `drawBehind`) y el buscador hereda la fuente del tema.
+  Si sigue cerrándose, hace falta el `logcat` (`adb logcat -b crash` o `logcat -d | grep -A30 FATAL`).
+- Verificado por lectura (no en dispositivo): barra de estado (`Theme.kt` fija `isAppearanceLight*` con el tema actual y la
+  Activity maneja `uiMode`) y fuente con pesos reales (`Fonts.kt`). La detección de familia por nombre es correcta
+  (`Typeface.create` devuelve `Typeface.DEFAULT` si no existe). Sin red no se pudo bundlear un `.ttf` redondeado.
+- Versión subida a 2.9.1 (app 105 / módulo 355). Tarea 1 (errores de CI): no se recibió log.
+
 ## 5. Siguientes pasos sugeridos
 1. Confirmar compilación (CI) y revisar en dispositivo.
 2. Si la fuente sigue sin verse redonda: bundlear un `.ttf` en `res/font/`.
@@ -79,12 +91,18 @@ Decisiones del usuario (ya aplicadas):
 - No usar nombres, textos ni gráficos de la app de referencia dentro del código ni de la UI.
 
 ## 7. Comandos Termux (entorno ya configurado)
+Una línea por comando: unzip del zip descargado del chat, git add, git commit, git push y después `ciwatch` (sin `cd`).
 El zip no trae carpeta raíz, por eso `-d sdbind_project`. Se extrae encima y conserva `.git`.
 
 ```bash
 cd /storage/emulated/0/Download && unzip -o sdbind_project.zip -d sdbind_project
-cd sdbind_project && git add -A && git commit -m "feat(ui): icono del usuario, deslizar para refrescar, cabecera Inicio, anillo más suave" && git push origin preview
+cd sdbind_project
+git add -A
+git commit -m "fix(ui): cierre en Ajustes (logo adaptativo) y Registro, v2.9.1"
+git push origin preview
+ciwatch
 ```
 
-`unzip` no borra archivos que ya no existan: si un cambio elimina alguno (p. ej. al renombrar), bórralo a mano antes del commit.
-Si todavía existen de la versión anterior, bórralos: `rm -f app/src/main/java/com/sdcardbind/manager/ui/DolbyKit.kt docs/reference/dolby_*.png`.
+`unzip` no borra archivos que ya no existan. En esta versión no se renombra ni elimina nada (solo se añade `app_logo.png`),
+así que no hay `rm` pendientes. Si aún existen de versiones anteriores:
+`rm -f app/src/main/java/com/sdcardbind/manager/ui/DolbyKit.kt docs/reference/dolby_*.png`.
