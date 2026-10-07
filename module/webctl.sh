@@ -1,4 +1,6 @@
 #!/system/bin/sh
+# CLI de root que usa la app (apply/unmount/status/...). El nombre histórico se mantiene a
+# propósito: la app instalada lo llama por ruta y renombrarlo rompería la app hasta reiniciar.
 MODDIR="/data/adb/modules/sdcard_bind_ui"
 CONF="$MODDIR/mounts.conf"
 . "$MODDIR/common/functions.sh"
@@ -17,7 +19,7 @@ case "$1" in
         # en functions.sh), se limpia: el usuario mismo está pidiendo montar ahora, así que a
         # partir de este punto el self-heal puede volver a actuar solo sobre ella.
         rm -f "$MISS_DIR"/.disc_* 2>/dev/null
-        UNMOUNT_REASON="webctl apply (reintento/Guardar y montar, app o WebUI)"
+        UNMOUNT_REASON="webctl apply (reintento/Guardar y montar, app)"
         unmount_all
         unset UNMOUNT_REASON
         apply_mounts
@@ -28,7 +30,7 @@ case "$1" in
         # "Desmontar todo" es intencional: mientras este archivo exista, _watch_cb (ver
         # functions.sh) no va a reintentar remontar nada solo, aunque el origen siga ahí.
         touch "$NOHEAL_MARKER" 2>/dev/null
-        UNMOUNT_REASON="webctl unmount (botón Desmontar todo, app o WebUI)"
+        UNMOUNT_REASON="webctl unmount (botón Desmontar todo, app)"
         unmount_all
         unset UNMOUNT_REASON
         echo "DONE"
@@ -42,7 +44,7 @@ case "$1" in
     status)
         # OJO: acá ANTES se llamaba a watch_and_prune "para reflejar la realidad al toque" —
         # ese era el bug real detrás de las caídas en uso intensivo, confirmado con el log
-        # diagnóstico: la app llama a "status" cada ~1.5s (y la WebUI también) mientras
+        # diagnóstico: la app llama a "status" cada ~1.5s mientras
         # service.sh corre su propio watch_and_prune cada 2s en paralelo, SIEMPRE, tenga la
         # app abierta o no. Dos-tres procesos root sueltos leyendo y escribiendo el mismo
         # marcador de gracia en $MISS_DIR sin ningún lock entre ellos: un salto de "recién
@@ -170,20 +172,7 @@ case "$1" in
         dump_storage
         ;;
 
-    theme)
-        seed=$(theme_seed)
-        [ -n "$seed" ] && echo "SEED|$seed"
-        if [ -f "$MODDIR/webroot/theme.css" ] && grep -q -- "--primary" "$MODDIR/webroot/theme.css" 2>/dev/null; then
-            echo "CSS|1"
-        else
-            echo "CSS|0"
-        fi
-        find_gsr | sort -u | while read -r f; do
-            [ -n "$f" ] && echo "FONT|$f"
-        done
-        ;;
-
     *)
-        echo "Uso: webctl.sh {apply|unmount|remove <origen> <destino>|status|detect|list_children <ruta>|subdirs <ruta>|entries <ruta>|rm <ruta> [dir]|prune|log|storage|theme}"
+        echo "Uso: webctl.sh {apply|unmount|remove <origen> <destino>|status|detect|list_children <ruta>|subdirs <ruta>|entries <ruta>|rm <ruta> [dir]|prune|log|fulllog|clearlog|anyvolpresent|storage}"
         ;;
 esac

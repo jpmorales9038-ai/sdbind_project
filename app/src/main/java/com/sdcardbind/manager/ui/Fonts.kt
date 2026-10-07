@@ -1,6 +1,7 @@
 package com.sdcardbind.manager.ui
 
 import android.graphics.Typeface
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -51,6 +52,7 @@ private fun findFontFile(): File? {
     return null
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 fun roundedTypography(font: FontFamily): Typography {
     val b = Typography()
     fun TextStyle.r() = copy(fontFamily = font)
@@ -69,6 +71,21 @@ fun roundedTypography(font: FontFamily): Typography {
         bodySmall = b.bodySmall.r(),
         labelLarge = b.labelLarge.r(),
         labelMedium = b.labelMedium.r(),
-        labelSmall = b.labelSmall.r()
+        labelSmall = b.labelSmall.r(),
+        displayLargeEmphasized = b.displayLargeEmphasized.r(),
+        displayMediumEmphasized = b.displayMediumEmphasized.r(),
+        displaySmallEmphasized = b.displaySmallEmphasized.r(),
+        headlineLargeEmphasized = b.headlineLargeEmphasized.r(),
+        headlineMediumEmphasized = b.headlineMediumEmphasized.r(),
+        headlineSmallEmphasized = b.headlineSmallEmphasized.r(),
+        titleLargeEmphasized = b.titleLargeEmphasized.r(),
+        titleMediumEmphasized = b.titleMediumEmphasized.r(),
+        titleSmallEmphasized = b.titleSmallEmphasized.r(),
+        bodyLargeEmphasized = b.bodyLargeEmphasized.r(),
+        bodyMediumEmphasized = b.bodyMediumEmphasized.r(),
+        bodySmallEmphasized = b.bodySmallEmphasized.r(),
+        labelLargeEmphasized = b.labelLargeEmphasized.r(),
+        labelMediumEmphasized = b.labelMediumEmphasized.r(),
+        labelSmallEmphasized = b.labelSmallEmphasized.r()
     )
 }

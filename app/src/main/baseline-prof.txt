@@ -9,19 +9,19 @@
 # y después anda bien. Una línea que no matchee ninguna clase real del DEX simplemente se
 # ignora al mezclar el profile (no rompe el build), así que no hay riesgo en listar de más.
 #
-# No hay entradas de Compose/Material3/coroutines/libsu/Haze acá a propósito: esos AAR ya
+# No hay entradas de Compose/Material3/coroutines/libsu acá a propósito: esos AAR ya
 # traen SU PROPIO baseline profile adentro (compilado por sus autores con benchmarks reales),
 # y con solo agregar la dependencia de profileinstaller, Android Gradle Plugin ya los fusiona
 # automáticamente en el profile final del APK. Intentar adivinar firmas de métodos internos
 # de esas librerías a mano no suma nada sobre eso y sí puede quedar desactualizado en cada
 # bump de versión — mejor dejarles ese trabajo a quienes sí pueden medirlo.
 #
-# Todas las clases propias de la app: MainActivity y su companion, TODOS los composables y
+# Todas las clases propias de la app: MainActivity y BindApplication, TODOS los composables y
 # funciones de nivel superior de MainActivity.kt (todos caen en la misma clase sintética
 # MainActivityKt, Kotlin no las separa salvo que se pida explícitamente), y los objetos
 # RootOps/Updater/Lang y el tema (Theme.kt/Fonts.kt).
 Lcom/sdcardbind/manager/MainActivity;
-Lcom/sdcardbind/manager/MainActivity$Companion;
+Lcom/sdcardbind/manager/BindApplication;
 Lcom/sdcardbind/manager/MainActivityKt;
 Lcom/sdcardbind/manager/RootOps;
 Lcom/sdcardbind/manager/Updater;

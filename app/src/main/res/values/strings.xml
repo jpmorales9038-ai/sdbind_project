@@ -73,10 +73,10 @@
     <string name="card_binds">Vínculos</string>
     <string name="card_binds_desc">Monta carpetas de SD u OTG dentro del interno</string>
     <string name="card_module">Módulo</string>
-    <string name="card_module_desc">KernelSU con WebUI de respaldo</string>
+    <string name="card_module_desc">Módulo para KernelSU y KernelSU-Next</string>
     <string name="card_explorer">Explorador</string>
     <string name="card_explorer_desc">Elige origen y destino tocando +</string>
-    <string name="card_material">Material You</string>
+    <string name="card_material">Material 3 Expressive</string>
     <string name="card_material_desc">Colores y formas dinámicos del sistema</string>
     <string name="language">Idioma</string>
     <string name="lang_system">Sistema</string>

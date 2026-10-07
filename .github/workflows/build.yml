@@ -2,7 +2,7 @@ name: Build APK + módulo KSU
 
 on:
   push:
-    branches: [main]
+    branches: [main, preview]
   workflow_dispatch:
 
 permissions:
@@ -42,13 +42,13 @@ jobs:
           # 8.11.1. Current version is 8.7").
           gradle-version: '8.11.1'
 
-      - name: Compilar APK (debug, instalable)
-        run: gradle :app:assembleDebug --stacktrace -Pandroid.injected.testOnly=false
+      - name: Compilar APK (release, R8, firmado con la keystore estable)
+        run: gradle :app:assembleRelease --stacktrace
 
       - name: Copiar APK dentro del módulo
         run: |
           mkdir -p module/app
-          cp app/build/outputs/apk/debug/app-debug.apk module/app/sdcard-bind-manager.apk
+          cp app/build/outputs/apk/release/app-release.apk module/app/sdcard-bind-manager.apk
 
       - name: Empaquetar módulo final (zip listo para instalar)
         run: |
@@ -67,9 +67,18 @@ jobs:
       - name: Versión y update.json
         id: ver
         run: |
-          VER=$(grep '^version=' module/module.prop | cut -d= -f2 | tr -d '\r')
+          BASE=$(grep '^version=' module/module.prop | cut -d= -f2 | tr -d '\r')
           CODE=$(grep '^versionCode=' module/module.prop | cut -d= -f2 | tr -d '\r')
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            VER="$BASE"; PRE=false; LATEST=true
+          else
+            # Ramas que no son main (p. ej. preview): pre-release con tag único por ejecución,
+            # que no se marca como "latest" (así no pisa update.json de los usuarios).
+            VER="${BASE}-${GITHUB_REF_NAME}.${GITHUB_RUN_NUMBER}"; PRE=true; LATEST=false
+          fi
           echo "tag=$VER" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
           cat > update.json << EOF
           {
             "version": "$VER",
@@ -83,9 +92,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: SD Bind ${{ steps.ver.outputs.tag }}
+          prerelease: ${{ steps.ver.outputs.prerelease }}
           files: |
             sdcard_bind_ui_con_app.zip
             update.json
           generate_release_notes: true
-          make_latest: true
+          make_latest: ${{ steps.ver.outputs.latest }}

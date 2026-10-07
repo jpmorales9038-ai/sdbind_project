@@ -4,43 +4,32 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.widget.Toast
-import android.webkit.MimeTypeMap
-import androidx.core.content.FileProvider
-import java.io.File
 import android.content.res.Configuration
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
+import android.webkit.MimeTypeMap
+import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -50,23 +39,21 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
-import androidx.compose.foundation.pager.PagerState
-import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.SdCard
 import androidx.compose.material.icons.outlined.Smartphone
@@ -75,16 +62,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -97,65 +82,25 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.sdcardbind.manager.ui.AppTheme
-import com.topjohnwu.superuser.Shell
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : ComponentActivity() {
-    companion object {
-        init {
-            Shell.setDefaultBuilder(
-                Shell.Builder.create()
-                    .setFlags(Shell.FLAG_MOUNT_MASTER or Shell.FLAG_REDIRECT_STDERR)
-                    .setTimeout(20)
-            )
-        }
-    }
-
+    // La config del shell root vive en BindApplication (registrada en el manifest): se
+    // arranca con el proceso, antes de que exista esta Activity.
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(
-                android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT
-            ),
-            navigationBarStyle = SystemBarStyle.auto(
-                android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT
-            )
-        )
+        // Un único enableEdgeToEdge: barras transparentes y íconos claros/oscuros según el
+        // tema del sistema. La barra de navegación Expressive pinta su propio fondo.
+        enableEdgeToEdge()
         setContent {
-            AppTheme {
-                // SystemBarStyle.auto() nunca deja pintar un fondo sólido en la barra de
-                // navegación real en Android 10+ (queda siempre transparente ahí, sin importar
-                // qué color le pasemos — así lo documenta Android). Para que quede negra de
-                // verdad en tema oscuro hace falta SystemBarStyle.dark(NEGRO), que sí fuerza un
-                // fondo sólido propio en vez de depender de que el contenido de la app la tape.
-                // En tema claro se deja como estaba (transparente).
-                val darkTheme = isSystemInDarkTheme()
-                DisposableEffect(darkTheme) {
-                    enableEdgeToEdge(
-                        statusBarStyle = SystemBarStyle.auto(
-                            android.graphics.Color.TRANSPARENT,
-                            android.graphics.Color.TRANSPARENT
-                        ),
-                        navigationBarStyle = if (darkTheme) {
-                            SystemBarStyle.dark(android.graphics.Color.BLACK)
-                        } else {
-                            SystemBarStyle.auto(
-                                android.graphics.Color.TRANSPARENT,
-                                android.graphics.Color.TRANSPARENT
-                            )
-                        }
-                    )
-                    onDispose {}
-                }
-                BindApp()
-            }
+            AppTheme { BindApp() }
         }
     }
 }
@@ -163,22 +108,22 @@ class MainActivity : ComponentActivity() {
 private enum class Tab { Home, Log, About }
 private enum class Flow { Home, PickSource, PickDest, Browse }
 
-private val spatial = tween<IntOffset>(420, easing = FastOutSlowInEasing)
-private val sizeSpring = spring<IntSize>(
-    dampingRatio = Spring.DampingRatioNoBouncy,
-    stiffness = Spring.StiffnessMediumLow
-)
-private val floatSpring = spring<Float>(
-    dampingRatio = Spring.DampingRatioNoBouncy,
-    stiffness = Spring.StiffnessMediumLow
-)
-private val colorTween = tween<Color>(360, easing = FastOutSlowInEasing)
+/** Animación de tamaño con el esquema de movimiento Expressive del tema. */
+@Composable
+private fun sizeSpec() = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
 
 @Composable
 fun BindApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val cs = MaterialTheme.colorScheme
+    val motion = MaterialTheme.motionScheme
+    val slideSpec = motion.defaultSpatialSpec<IntOffset>()
+    val fadeInSpec = motion.defaultEffectsSpec<Float>()
+    val fadeOutSpec = motion.fastEffectsSpec<Float>()
+    val fabSpec = motion.fastSpatialSpec<Float>()
+    val pageSpec = motion.defaultEffectsSpec<Float>()
+    val snackbarHost = remember { SnackbarHostState() }
     var rootOk by remember { mutableStateOf<Boolean?>(null) }
     var entries by remember { mutableStateOf(listOf<MountEntry>()) }
     var volumes by remember { mutableStateOf(listOf<StorageVolume>()) }
@@ -190,7 +135,7 @@ fun BindApp() {
         scope.launch {
             pagerState.animateScrollToPage(
                 t.ordinal,
-                animationSpec = tween(480, easing = FastOutSlowInEasing)
+                animationSpec = pageSpec
             )
         }
     }
@@ -224,7 +169,7 @@ fun BindApp() {
         scope.launch {
             var best: StorageVolume? = null
             repeat(8) {
-                kotlinx.coroutines.delay(400)
+                delay(400)
                 val latest = RootOps.storageVolumes()
                 applyVolumes(latest)
                 // Al conectar hardware, además de los anillos, refrescamos el estado de los
@@ -304,22 +249,32 @@ fun BindApp() {
         if (rootOk == true) refresh()
     }
     LaunchedEffect(snack) {
-        if (snack != null) {
-            kotlinx.coroutines.delay(2800)
+        snack?.let {
+            snackbarHost.showSnackbar(it)
             snack = null
         }
     }
 
+    // El sondeo (cada 1.5s: volúmenes + estado de cada vínculo) solo corre con la app visible.
+    // Antes seguía lanzando comandos root en segundo plano aunque la pantalla estuviera
+    // apagada; ahora se pausa solo y, al volver, refresca de inmediato.
+    val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(rootOk) {
         if (rootOk != true) return@LaunchedEffect
-        while (true) {
-            kotlinx.coroutines.delay(1500)
-            applyVolumes(RootOps.storageVolumes())
-            // Antes este loop solo refrescaba los anillos de almacenamiento; el estado de
-            // cada vínculo (presente/ausente) se quedaba viejo hasta salir de la app o
-            // mantener presionado. Ahora se recalcula en el mismo ciclo, sin pruneStaleMounts
-            // ni tailLog (eso sigue solo en refresh()) para no hacer de más cada 1.5s.
-            entries = RootOps.loadMounts()
+        var firstStart = true
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            if (!firstStart) {
+                applyVolumes(RootOps.storageVolumes())
+                entries = RootOps.loadMounts()
+            }
+            firstStart = false
+            while (true) {
+                delay(1500)
+                applyVolumes(RootOps.storageVolumes())
+                // El estado de cada vínculo (presente/ausente) se recalcula en el mismo
+                // ciclo, sin pruneStaleMounts ni tailLog (eso sigue solo en refresh()).
+                entries = RootOps.loadMounts()
+            }
         }
     }
 
@@ -372,21 +327,60 @@ fun BindApp() {
         else -> "tabs"
     }
 
-    // Un único HazeState conecta el contenido que scrollea (fuente) con el pill y el
-    // scrim flotantes (efectos): así el difuminado que se ve detrás del pill es el
-    // contenido real pasando por detrás, no un color plano.
-    val hazeState = remember { HazeState() }
+    val showChrome = screen == "tabs" && rootOk == true
+    val hasExternal = volumes.any { it.kind == VolumeKind.EXTERNAL }
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = cs.background,
+        snackbarHost = { SnackbarHost(snackbarHost) },
+        bottomBar = {
+            AnimatedVisibility(
+                visible = showChrome,
+                enter = slideInVertically(slideSpec) { it } + fadeIn(fadeInSpec),
+                exit = slideOutVertically(slideSpec) { it } + fadeOut(fadeOutSpec)
+            ) {
+                AppNavBar(pagerState = pagerState, onTab = goTab)
+            }
+        },
+        floatingActionButton = {
+            // Sin ninguna unidad externa (SD/OTG) montada no hay de dónde elegir un origen:
+            // el FAB se ve apagado y, en vez de abrir el selector, avisa por qué.
+            AnimatedVisibility(
+                visible = showChrome && currentTab == Tab.Home,
+                enter = scaleIn(fabSpec) + fadeIn(fadeInSpec),
+                exit = scaleOut(fabSpec) + fadeOut(fadeOutSpec)
+            ) {
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        if (hasExternal) {
+                            flow = Flow.PickSource; pendingSource = ""
+                        } else {
+                            snack = context.getString(R.string.no_external_hint)
+                        }
+                    },
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text(stringResource(R.string.add_bind)) },
+                    containerColor = if (hasExternal) cs.primaryContainer else cs.surfaceVariant,
+                    contentColor = if (hasExternal) cs.onPrimaryContainer else cs.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+            AnimatedVisibility(
+                visible = showChrome && currentTab == Tab.Log,
+                enter = scaleIn(fabSpec) + fadeIn(fadeInSpec),
+                exit = scaleOut(fabSpec) + fadeOut(fadeOutSpec)
+            ) {
+                FloatingActionButton(
+                    onClick = { clearLogNow() },
+                    containerColor = cs.errorContainer,
+                    contentColor = cs.onErrorContainer
+                ) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.clear_log)) }
+            }
+        }
     ) { pad ->
         Row(
             Modifier
                 .fillMaxSize()
                 .padding(pad)
-                // Marca este contenido como la fuente que el scrim/pill van a leer y
-                // difuminar por detrás — el equivalente nativo del backdrop-filter del WebUI.
-                .hazeSource(state = hazeState)
         ) {
             AnimatedContent(
                 targetState = screen,
@@ -394,11 +388,11 @@ fun BindApp() {
             transitionSpec = {
                 val forward = targetState == "src" || (initialState == "src" && targetState == "dst")
                 if (forward) {
-                    (slideInHorizontally(spatial) { it } + fadeIn(tween(380, easing = FastOutSlowInEasing))) togetherWith
-                        (slideOutHorizontally(spatial) { -it / 5 } + fadeOut(tween(280, easing = FastOutSlowInEasing)))
+                    (slideInHorizontally(slideSpec) { it } + fadeIn(fadeInSpec)) togetherWith
+                        (slideOutHorizontally(slideSpec) { -it / 5 } + fadeOut(fadeOutSpec))
                 } else {
-                    (slideInHorizontally(spatial) { -it / 5 } + fadeIn(tween(380, easing = FastOutSlowInEasing))) togetherWith
-                        (slideOutHorizontally(spatial) { it } + fadeOut(tween(280, easing = FastOutSlowInEasing)))
+                    (slideInHorizontally(slideSpec) { -it / 5 } + fadeIn(fadeInSpec)) togetherWith
+                        (slideOutHorizontally(slideSpec) { it } + fadeOut(fadeOutSpec))
                 }.using(SizeTransform(clip = false))
             },
             label = "screen"
@@ -503,87 +497,6 @@ fun BindApp() {
         }
         }
     }
-    // El pill vive FUERA del Scaffold (ya no es bottomBar), flotando encima del contenido.
-    // Así, cuando el usuario scrollea, las cards pasan físicamente por detrás y se alcanzan
-    // a ver a través de su fondo semitransparente — no un color opaco tapando todo.
-    // (Se sacó el scrim/blur de la barra de estado: terminaba difuminando también el título
-    // y el resto del contenido que queda pegado arriba, en vez de solo lo que pasa detrás.)
-    AnimatedVisibility(
-        visible = screen == "tabs" && rootOk == true,
-        enter = fadeIn(),
-        exit = fadeOut(),
-        modifier = Modifier.align(Alignment.BottomCenter)
-    ) {
-        // El scrim va DETRÁS del pill (se declara primero): difumina el contenido que pasa
-        // por detrás, con un tinte blanco o negro según el tema — igual que en el WebUI —
-        // sin tocar el color sólido del pill.
-        NavScrim(hazeState = hazeState)
-    }
-    // FAB y toast se sacaron de los slots del Scaffold y se declaran ACÁ, después del
-    // NavScrim: en Compose, lo que se declara más tarde dentro del mismo Box se dibuja
-    // arriba. Antes el scrim (declarado después del Scaffold) tapaba ambos; ahora quedan
-    // siempre por delante del difuminado, sin tocar cómo se ve este último.
-    AnimatedVisibility(
-        visible = screen == "tabs" && currentTab == Tab.Home && rootOk == true,
-        enter = scaleIn(floatSpring) + fadeIn(),
-        exit = scaleOut() + fadeOut(),
-        modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .navigationBarsPadding()
-            .padding(bottom = 84.dp, end = 16.dp)
-    ) {
-        // Sin ninguna unidad externa (SD/OTG) montada no hay de dónde elegir un origen —
-        // FloatingActionButton no tiene un parámetro "enabled" propio, así que se lo simula:
-        // colores apagados (surfaceVariant en vez del container de color) y el click, en vez
-        // de abrir el selector, solo avisa por qué está apagado.
-        val hasExternal = volumes.any { it.kind == VolumeKind.EXTERNAL }
-        FloatingActionButton(
-            onClick = {
-                if (hasExternal) {
-                    flow = Flow.PickSource; pendingSource = ""
-                } else {
-                    snack = context.getString(R.string.no_external_hint)
-                }
-            },
-            containerColor = if (hasExternal) cs.primaryContainer else cs.surfaceVariant,
-            contentColor = if (hasExternal) cs.onPrimaryContainer else cs.onSurfaceVariant.copy(alpha = 0.6f),
-            shape = CircleShape
-        ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_bind)) }
-    }
-    AnimatedVisibility(
-        visible = screen == "tabs" && currentTab == Tab.Log && rootOk == true,
-        enter = scaleIn(floatSpring) + fadeIn(),
-        exit = scaleOut() + fadeOut(),
-        modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .navigationBarsPadding()
-            .padding(bottom = 84.dp, end = 16.dp)
-    ) {
-        FloatingActionButton(
-            onClick = { clearLogNow() },
-            containerColor = cs.errorContainer,
-            contentColor = cs.onErrorContainer,
-            shape = CircleShape
-        ) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.clear_log)) }
-    }
-    snack?.let {
-        Snackbar(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 16.dp),
-            containerColor = cs.inverseSurface,
-            contentColor = cs.inverseOnSurface
-        ) { Text(it) }
-    }
-    AnimatedVisibility(
-        visible = screen == "tabs" && rootOk == true,
-        enter = slideInVertically { it } + fadeIn(),
-        exit = slideOutVertically { it } + fadeOut(),
-        modifier = Modifier.align(Alignment.BottomCenter)
-    ) {
-        BottomNav(hazeState = hazeState, pagerState = pagerState, onTab = goTab)
-    }
     OtgConnectPopup(vol = otgPopup, onDismiss = { otgPopup = null })
     pendingDelete?.let { entry ->
         val name = dirBaseName(entry.dest).ifBlank { dirBaseName(entry.source).ifBlank { context.getString(R.string.this_bind) } }
@@ -618,6 +531,7 @@ fun BindApp() {
     }
     }
 }
+
 
 @Composable
 private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
@@ -703,188 +617,29 @@ private fun OtgConnectPopup(vol: StorageVolume?, onDismiss: () -> Unit) {
     }
 }
 
-private val pillSpring = spring<Float>(
-    dampingRatio = 0.82f,
-    stiffness = 380f
-)
-
 /**
- * Capa de difuminado que vive FUERA/DETRÁS del pill (nunca dentro de él). Lee el contenido
- * marcado con `hazeSource` en el Scaffold y lo dibuja blureado y atenuado hacia arriba,
- * igual que el `.nav-scrim` del WebUI: sin esto, el pill quedaría flotando sin transición
- * hacia el contenido que tiene detrás.
- *
- * El degradado de base no depende de que Haze pueda blurear (Android 12+); el blur es un
- * extra, no el único efecto.
+ * Barra de navegación Material 3 Expressive (reemplaza el "pill" flotante hecho a mano y su
+ * difuminado): menos capas de dibujo, accesibilidad y animaciones del sistema.
  */
 @Composable
-private fun NavScrim(hazeState: HazeState) {
-    val cs = MaterialTheme.colorScheme
-    val darkTheme = isSystemInDarkTheme()
-    // En paisaje la pantalla es mucho más baja: una altura pensada para retrato resulta
-    // desproporcionada ahí y termina tapando botones y el registro que quedan debajo.
-    // Se recorta a algo mucho más bajo, igual que .nav-scrim en el WebUI para landscape.
-    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val scrimHeight = if (landscape) 64.dp else 168.dp
-    // Blanco en modo claro, negro en modo oscuro — el mismo criterio que --scrim-tint en CSS.
-    val scrimTint = if (darkTheme) Color.Black else Color.White
-    // En modo oscuro el degradado va a negro puro (no a cs.background, que en Monet suele
-    // quedar gris oscuro, no negro) para que se funda con el pill, que también es negro puro
-    // ahí abajo — así quedan camuflados en vez de notarse el borde entre los dos.
-    val scrimBase = if (darkTheme) Color.Black else cs.background
-    Box(
-        Modifier
-            .fillMaxWidth()
-            // Mismo criterio que en StatusScrim: si .navigationBarsPadding() va antes del
-            // background/hazeEffect, el degradado no llega a pintar la franja real de la
-            // barra de navegación (queda como padding vacío) y aparece un corte seco justo
-            // encima de ella. Sumamos su alto a la altura fija del box en vez de usarlo
-            // como padding, así el degradado sigue llegando hasta el borde físico inferior.
-            .height(scrimHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color.Transparent, scrimBase.copy(alpha = 0.94f))
-                )
-            )
-            .hazeEffect(state = hazeState) {
-                blurRadius = 24.dp
-                tints = listOf(HazeTint(scrimTint.copy(alpha = 0.32f)))
-                // Se desvanece hacia arriba: transparente en el borde superior, completo
-                // hacia abajo, junto al pill — igual que el mask-image del CSS.
-                mask = Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black))
-            }
-    )
-}
-
-
-@Composable
-private fun BottomNav(hazeState: HazeState, pagerState: PagerState, onTab: (Tab) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    // Fondo de la cápsula: variación tonal de la paleta Monet (secondaryContainer cambia
-    // según el wallpaper del usuario en Android 12+), mezclada levemente con la superficie
-    // para mantener legibilidad si el dispositivo no soporta color dinámico.
-    // El difuminado vive aparte, en NavScrim, por detrás del pill.
-    val pillSolid = remember(cs.surfaceContainerHigh, cs.secondaryContainer) {
-        lerp(cs.surfaceContainerHigh, cs.secondaryContainer, 0.65f)
-    }
-    val thumbColor = cs.primary
-    val inkOn = cs.onPrimary
-    val inkOff = cs.onSecondaryContainer
+private fun AppNavBar(pagerState: PagerState, onTab: (Tab) -> Unit) {
     val labels = listOf(
         stringResource(R.string.tab_home),
         stringResource(R.string.tab_log),
         stringResource(R.string.tab_about)
     )
     val icons = listOf(Icons.Filled.Home, Icons.Filled.Notes, Icons.Filled.Info)
-    val tabs = Tab.entries
-    val pos = remember { mutableStateListOf(0f, 0f, 0f) }
-    val widths = remember { mutableStateListOf(0f, 0f, 0f) }
-    val thumbX = remember { Animatable(0f) }
-    val thumbW = remember { Animatable(0f) }
-    val progress = pagerState.currentPage + pagerState.currentPageOffsetFraction
-    val selected = progress.roundToInt().coerceIn(0, 2)
-    val moving = kotlin.math.abs(pagerState.currentPageOffsetFraction) > 0.01f
-
-    LaunchedEffect(progress, pos.toList(), widths.toList()) {
-        if (widths.all { it <= 1f }) return@LaunchedEffect
-        val i = progress.toInt().coerceIn(0, 1)
-        val t = (progress - i).coerceIn(0f, 1f)
-        val j = (i + 1).coerceAtMost(2)
-        val x = pos[i] + (pos[j] - pos[i]) * t
-        val w = widths[i] + (widths[j] - widths[i]) * t
-        if (w <= 1f) return@LaunchedEffect
-        if (moving) {
-            thumbX.snapTo(x)
-            thumbW.snapTo(w)
-        } else {
-            thumbX.animateTo(x, pillSpring)
-            thumbW.animateTo(w, pillSpring)
-        }
-    }
-
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(start = 20.dp, end = 20.dp, bottom = 14.dp, top = 6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            Modifier
-                .height(68.dp)
-                .clip(CircleShape)
-                .background(pillSolid)
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-        ) {
-            Box(Modifier.height(52.dp), contentAlignment = Alignment.CenterStart) {
-                val density = LocalDensity.current
-                Box(
-                    Modifier
-                        .offset { IntOffset(thumbX.value.roundToInt(), 0) }
-                        .width(with(density) { thumbW.value.toDp() })
-                        .fillMaxHeight()
-                        .clip(CircleShape)
-                        .background(thumbColor)
-                )
-                Row(
-                    Modifier.fillMaxHeight(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    tabs.forEachIndexed { i, tab ->
-                        val on = selected == i
-                        val tint by animateColorAsState(if (on) inkOn else inkOff, label = "navTint")
-                        Row(
-                            Modifier
-                                .onGloballyPositioned { c ->
-                                    val x = c.positionInParent().x
-                                    val w = c.size.width.toFloat()
-                                    if (pos[i] != x) pos[i] = x
-                                    if (widths[i] != w) widths[i] = w
-                                }
-                                .clip(CircleShape)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) { onTab(tab) }
-                                .padding(horizontal = 18.dp)
-                                .fillMaxHeight(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                icons[i],
-                                contentDescription = labels[i],
-                                tint = tint,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            AnimatedVisibility(
-                                visible = on,
-                                enter = fadeIn(tween(220)) + expandHorizontally(animationSpec = pillSizeSpring),
-                                exit = fadeOut(tween(160)) + shrinkHorizontally(animationSpec = pillSizeSpring)
-                            ) {
-                                Row {
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        labels[i],
-                                        color = tint,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 16.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Clip
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    ShortNavigationBar {
+        Tab.entries.forEachIndexed { i, tab ->
+            ShortNavigationBarItem(
+                selected = pagerState.currentPage == i,
+                onClick = { onTab(tab) },
+                icon = { Icon(icons[i], contentDescription = null) },
+                label = { Text(labels[i]) }
+            )
         }
     }
 }
-
-private val pillSizeSpring = spring<IntSize>(
-    dampingRatio = 0.82f,
-    stiffness = 380f
-)
 
 @Composable
 private fun NoRoot() {
@@ -896,7 +651,7 @@ private fun NoRoot() {
     ) {
         Icon(Icons.Filled.Lock, null, tint = cs.error, modifier = Modifier.size(48.dp))
         Spacer(Modifier.height(16.dp))
-        Text(stringResource(R.string.no_root), color = cs.onBackground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.no_root), color = cs.onBackground, style = MaterialTheme.typography.headlineMediumEmphasized)
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.no_root_hint), color = cs.onSurfaceVariant)
     }
@@ -955,7 +710,7 @@ private fun HomePane(
 private fun HomeHeader() {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("SD Bind", color = cs.onBackground, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text("SD Bind", color = cs.onBackground, style = MaterialTheme.typography.displaySmallEmphasized, modifier = Modifier.weight(1f))
         Box(
             Modifier.clip(CircleShape).background(cs.tertiaryContainer).padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
@@ -971,7 +726,7 @@ private fun BindList(
     onOpen: (String) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
-    Text(stringResource(R.string.binds), color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    Text(stringResource(R.string.binds), color = cs.onBackground, style = MaterialTheme.typography.titleLargeEmphasized)
     Spacer(Modifier.height(12.dp))
     if (entries.isEmpty()) {
         Box(
@@ -999,9 +754,9 @@ private fun ActionButtons(busy: Boolean, hasEntries: Boolean, hasExternal: Boole
     Button(
         onClick = onApply,
         enabled = !busy && hasEntries && hasExternal,
-        modifier = Modifier.fillMaxWidth().height(52.dp),
-        shape = MaterialTheme.shapes.large
-    ) { Text(stringResource(R.string.save_mount), fontWeight = FontWeight.Bold) }
+        modifier = Modifier.fillMaxWidth().heightIn(min = ButtonDefaults.MediumContainerHeight),
+        shapes = ButtonDefaults.shapes()
+    ) { Text(stringResource(R.string.save_mount), style = MaterialTheme.typography.titleMediumEmphasized) }
     Spacer(Modifier.height(8.dp))
     // "Desmontar todo" queda siempre disponible a propósito (no depende de hasExternal): es
     // la vía manual de escape si algo quedó mal desmontado justo después de retirar la
@@ -1022,7 +777,7 @@ private fun StorageHero(volumes: List<StorageVolume>, playToken: Int, onRefresh:
             .background(cs.surfaceContainer)
             .pointerInput(Unit) { detectTapGestures(onLongPress = { onRefresh() }) }
             .padding(20.dp)
-            .animateContentSize(sizeSpring)
+            .animateContentSize(sizeSpec())
     ) {
         Text(stringResource(R.string.storage), color = cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(16.dp))
@@ -1091,6 +846,7 @@ private fun StorageCell(
 @Composable
 private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: Boolean = false, playToken: Int = 0) {
     val cs = MaterialTheme.colorScheme
+    val effects = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
     val anim = remember { Animatable(0f) }
     var lastToken by remember { mutableIntStateOf(playToken) }
     LaunchedEffect(playToken, percent) {
@@ -1098,31 +854,28 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
         if (playToken != lastToken) {
             lastToken = playToken
             anim.snapTo(0f)
-            anim.animateTo(t, tween(900, easing = FastOutSlowInEasing))
-        } else {
-            anim.animateTo(t, tween(900, easing = FastOutSlowInEasing))
         }
+        anim.animateTo(t, effects)
     }
-    val animated = anim.value
     val track = if (secondary) cs.secondaryContainer else cs.primaryContainer
     val arc = if (secondary) cs.secondary else cs.primary
+    val strokePx = with(LocalDensity.current) { 8.dp.toPx() }
+    val stroke = remember(strokePx) { Stroke(width = strokePx, cap = StrokeCap.Round) }
     Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val stroke = 10.dp.toPx()
-            val arcSize = Size(size.minDimension - stroke, size.minDimension - stroke)
-            val topLeft = Offset(stroke / 2, stroke / 2)
-            drawArc(
-                track, -90f, 360f, false,
-                topLeft = topLeft, size = arcSize,
-                style = Stroke(stroke, cap = StrokeCap.Round)
-            )
-            drawArc(
-                arc, -90f, 360f * animated, false,
-                topLeft = topLeft, size = arcSize,
-                style = Stroke(stroke, cap = StrokeCap.Round)
-            )
-        }
-        Text("${(animated * 100).toInt()}%", color = cs.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        // Anillo ondulado Expressive: la "ola" marca visualmente el progreso.
+        CircularWavyProgressIndicator(
+            progress = { anim.value },
+            modifier = Modifier.fillMaxSize(),
+            color = arc,
+            trackColor = track,
+            stroke = stroke,
+            trackStroke = stroke
+        )
+        Text(
+            "${(anim.value * 100).toInt()}%",
+            color = cs.onSurface,
+            style = MaterialTheme.typography.titleMediumEmphasized
+        )
     }
 }
 
@@ -1174,19 +927,20 @@ private fun BindCard(entry: MountEntry, onDelete: () -> Unit, onOpen: () -> Unit
     val cs = MaterialTheme.colorScheme
     val isMounted = entry.status == "MOUNTED"
     val name = dirBaseName(entry.dest).ifBlank { dirBaseName(entry.source).ifBlank { stringResource(R.string.bind_fallback) } }
+    val iconShape = MaterialShapes.Cookie9Sided.toShape()
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.large)
+            .clip(MaterialTheme.shapes.extraLarge)
             .background(cs.surfaceContainer)
             .padding(14.dp)
-            .animateContentSize(sizeSpring),
+            .animateContentSize(sizeSpec()),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             Modifier
-                .size(48.dp)
-                .clip(CircleShape)
+                .size(52.dp)
+                .clip(iconShape)
                 .background(if (isMounted) cs.primaryContainer else cs.primaryContainer.copy(alpha = 0.35f))
                 .then(
                     if (isMounted) {
@@ -1206,7 +960,7 @@ private fun BindCard(entry: MountEntry, onDelete: () -> Unit, onOpen: () -> Unit
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(name, color = cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(name, color = cs.onSurface, style = MaterialTheme.typography.titleMediumEmphasized, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(entry.source.ifBlank { stringResource(R.string.no_source) }, color = cs.onSurfaceVariant, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("→ ${entry.dest.ifBlank { stringResource(R.string.no_dest) }}", color = cs.primary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(4.dp))
@@ -1332,7 +1086,7 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
     ) {
         Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.about), color = cs.onBackground, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.about), color = cs.onBackground, style = MaterialTheme.typography.displaySmallEmphasized)
         Spacer(Modifier.height(20.dp))
         Column(
             Modifier
@@ -1348,7 +1102,7 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             Text(stringResource(R.string.version_fmt, ver ?: "2.5.4"), color = cs.onSurfaceVariant, fontSize = 14.sp)
         }
         Spacer(Modifier.height(24.dp))
-        Text(stringResource(R.string.tools), color = cs.onBackground, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.tools), color = cs.onBackground, style = MaterialTheme.typography.titleLargeEmphasized)
         Spacer(Modifier.height(12.dp))
         Row(
             Modifier
@@ -1377,11 +1131,10 @@ private fun AboutPane(busy: Boolean, onCheck: () -> Unit) {
             Button(
                 onClick = onCheck,
                 enabled = !busy,
-                shape = CircleShape,
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                shapes = ButtonDefaults.shapes()
             ) {
                 if (busy) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = cs.onPrimary)
+                    LoadingIndicator(Modifier.size(24.dp), color = cs.onPrimary)
                 } else {
                     Text(stringResource(R.string.search))
                 }
@@ -1452,17 +1205,15 @@ private fun LogPane(log: String) {
     Column(
         Modifier
             .fillMaxSize()
-            // Abajo se deja más aire que en los otros lados: el NavScrim flotante pasa por
-            // detrás de este panel y, sin este margen extra, el borde inferior de la tarjeta
-            // del registro quedaba justo debajo de donde el difuminado ya se ve sólido.
-            .padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 84.dp)
+            // Abajo se deja más aire que en los otros lados: el FAB de borrar queda
+            // flotando sobre el borde inferior de la tarjeta del registro.
+            .padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 96.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 stringResource(R.string.log),
                 color = cs.onBackground,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.displaySmallEmphasized,
                 modifier = Modifier.weight(1f)
             )
             IconButton(onClick = {
@@ -1541,15 +1292,19 @@ private fun FolderPickerScreen(
     LaunchedEffect(current) { load(current) }
 
     Column(Modifier.fillMaxSize().background(cs.background)) {
-        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, null, tint = cs.onBackground)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title, color = cs.onBackground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text(hint, color = cs.onSurfaceVariant, fontSize = 12.sp)
-            }
-        }
+        TopAppBar(
+            title = {
+                Column {
+                    Text(title, style = MaterialTheme.typography.titleLargeEmphasized)
+                    Text(hint, color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            navigationIcon = {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            windowInsets = WindowInsets(0, 0, 0, 0)
+        )
 
         Row(
             Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
@@ -1584,7 +1339,7 @@ private fun FolderPickerScreen(
             AnimatedContent(targetState = loading to children, label = "dirs") { (isLoading, dirs) ->
                 when {
                     isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = cs.primary)
+                        LoadingIndicator()
                     }
                     dirs.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.no_subfolders), color = cs.onSurfaceVariant)
@@ -1602,7 +1357,7 @@ private fun FolderPickerScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
-                                    Modifier.size(42.dp).clip(CircleShape).background(cs.primaryContainer),
+                                    Modifier.size(44.dp).clip(MaterialShapes.Cookie6Sided.toShape()).background(cs.primaryContainer),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(Icons.Filled.Folder, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(22.dp))
@@ -1639,9 +1394,9 @@ private fun FolderPickerScreen(
             Button(
                 onClick = { onPicked(current) },
                 enabled = !blocked,
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = MaterialTheme.shapes.large
-            ) { Text(confirmLabel, fontWeight = FontWeight.Bold) }
+                modifier = Modifier.fillMaxWidth().heightIn(min = ButtonDefaults.MediumContainerHeight),
+                shapes = ButtonDefaults.shapes()
+            ) { Text(confirmLabel, style = MaterialTheme.typography.titleMediumEmphasized) }
         }
     }
 }
@@ -1696,21 +1451,25 @@ private fun FileBrowserScreen(startPath: String, onBack: () -> Unit) {
     LaunchedEffect(current) { load(current) }
 
     Column(Modifier.fillMaxSize().background(cs.background)) {
-        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, null, tint = cs.onBackground)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.explore), color = cs.onBackground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text(
-                    dirBaseName(current).ifBlank { current },
-                    color = cs.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+        TopAppBar(
+            title = {
+                Column {
+                    Text(stringResource(R.string.explore), style = MaterialTheme.typography.titleLargeEmphasized)
+                    Text(
+                        dirBaseName(current).ifBlank { current },
+                        color = cs.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            },
+            navigationIcon = {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            windowInsets = WindowInsets(0, 0, 0, 0)
+        )
 
         Spacer(Modifier.height(4.dp))
         Text(
@@ -1736,7 +1495,7 @@ private fun FileBrowserScreen(startPath: String, onBack: () -> Unit) {
             AnimatedContent(targetState = loading to dirEntries, label = "files") { (isLoading, files) ->
                 when {
                     isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = cs.primary)
+                        LoadingIndicator()
                     }
                     files.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.empty_folder), color = cs.onSurfaceVariant)
@@ -1808,7 +1567,7 @@ private fun FileRow(entry: FileEntry, onClick: () -> Unit, onDelete: () -> Unit)
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(42.dp).clip(CircleShape).background(cs.primaryContainer),
+            Modifier.size(44.dp).clip(MaterialShapes.Cookie6Sided.toShape()).background(cs.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
             Icon(

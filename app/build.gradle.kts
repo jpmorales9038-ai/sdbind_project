@@ -12,8 +12,8 @@ android {
         applicationId = "com.sdcardbind.manager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 103
-        versionName = "2.8.46"
+        versionCode = 104
+        versionName = "2.9.0"
     }
 
     signingConfigs {
@@ -30,7 +30,12 @@ android {
             signingConfig = signingConfigs.getByName("stable")
         }
         release {
-            isMinifyEnabled = false
+            // R8 + recorte de recursos: APK más chico y código optimizado (las reglas están en
+            // proguard-rules.pro). Firma con la misma keystore que debug, así que el
+            // `pm install -r` desde el módulo sigue actualizando sin desinstalar.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("stable")
         }
     }
@@ -42,7 +47,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
-        freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+        freeCompilerArgs += listOf(
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi"
+        )
     }
 
     buildFeatures {
@@ -67,19 +75,22 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
+    // Instala el baseline profile (src/main/baseline-prof.txt) sin depender de Play Store.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    // Material 3 Expressive (MaterialExpressiveTheme, ShortNavigationBar, LoadingIndicator,
+    // CircularWavyProgressIndicator, MaterialShapes...): 1.4.0 o superior.
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.graphics:graphics-shapes:1.0.1")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.animation:animation")
 
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
 
-    // Difuminado nativo del pill flotante (equivalente al backdrop-filter del WebUI).
-    implementation("dev.chrisbanes.haze:haze:1.7.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

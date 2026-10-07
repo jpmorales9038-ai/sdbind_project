@@ -54,7 +54,7 @@ strip_slash() {
 }
 
 # La app (libsu) corre en un mount namespace aislado: el bind queda invisible
-# para el resto de apps. La WebUI de KSU sí usa el namespace global (init).
+# para el resto de apps. El gestor de KSU sí usa el namespace global (init).
 # nsenter -t 1 -m hace el mount donde todo el sistema lo ve.
 run_global() {
     if [ -r /proc/1/ns/mnt ]; then
@@ -97,7 +97,7 @@ is_mounted() {
 wait_for_path() {
     SRC="$1"
     # SDBIND_FAST=1 lo pone webctl.sh cuando el "apply" viene de un tap interactivo del
-    # usuario (app o WebUI), donde esperar no tiene sentido: o el origen ya está ahí, o no
+    # usuario (app), donde esperar no tiene sentido: o el origen ya está ahí, o no
     # va a aparecer por esperar. Sin esto, cada entrada de OTRA unidad que ya no está
     # conectada suma sus propios 15s de espera antes de seguir con la siguiente — con dos o
     # tres unidades desconectadas eso se siente como que la app se cuelga. La espera larga
@@ -210,7 +210,7 @@ unmount_all() {
 }
 
 MISS_DIR="$MODDIR/.watch_grace"
-# El usuario pidió desmontar todo a propósito (botón "Desmontar todo" / WebUI): mientras
+# El usuario pidió desmontar todo a propósito (botón "Desmontar todo" de la app): mientras
 # este archivo exista, _watch_cb NO reintenta remontar nada, aunque el origen siga presente.
 # Lo pone webctl.sh en el caso "unmount" y lo saca en "apply" (ver ese archivo).
 NOHEAL_MARKER="$MODDIR/.no_autoheal"
@@ -635,29 +635,4 @@ $( {
     '
 } | sort -u )
 EOF
-}
-
-
-theme_seed() {
-    pkg=$(settings get secure theme_customization_overlay_packages 2>/dev/null)
-    echo "$pkg" | tr ',{}' '\n' | grep -i system_palette | grep -oE '[0-9A-Fa-f]{6,8}' | head -1
-}
-
-find_gsr() {
-    for f in \
-        /system/fonts/GoogleSansRounded-Regular.ttf \
-        /system/fonts/GoogleSansRounded-Medium.ttf \
-        /system/fonts/GoogleSansRounded-VF.ttf \
-        /product/fonts/GoogleSansRounded-Regular.ttf \
-        /system_ext/fonts/GoogleSansRounded-Regular.ttf \
-        /system/fonts/GoogleSansFlex-Variable.ttf \
-        /system/fonts/GoogleSansFlex.ttf \
-        /system/fonts/GoogleSansFlex-Regular.ttf \
-        /system/fonts/GoogleSans-Regular.ttf
-    do
-        [ -f "$f" ] && echo "$f"
-    done
-    find /system/fonts /product/fonts /system_ext/fonts \
-        \( -iname '*GoogleSansRound*' -o -iname '*GoogleSansFlex*' -o -iname 'GoogleSans-Regular*' \) \
-        2>/dev/null
 }

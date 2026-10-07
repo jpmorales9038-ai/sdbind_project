@@ -73,10 +73,10 @@
     <string name="card_binds">Binds</string>
     <string name="card_binds_desc">Mount SD or OTG folders inside internal storage</string>
     <string name="card_module">Module</string>
-    <string name="card_module_desc">KernelSU with a fallback WebUI</string>
+    <string name="card_module_desc">Module for KernelSU and KernelSU-Next</string>
     <string name="card_explorer">Explorer</string>
     <string name="card_explorer_desc">Pick source and destination with +</string>
-    <string name="card_material">Material You</string>
+    <string name="card_material">Material 3 Expressive</string>
     <string name="card_material_desc">Dynamic system colors and shapes</string>
     <string name="language">Language</string>
     <string name="lang_system">System</string>

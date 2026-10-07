@@ -1,124 +1,65 @@
 package com.sdcardbind.manager.ui
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowCompat
-import com.sdcardbind.manager.MODDIR
-import com.topjohnwu.superuser.Shell
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
+/**
+ * Tema Material 3 Expressive: color dinámico (Material You) + esquema de movimiento
+ * expressive (resortes con rebote suave) + tipografía redondeada con estilos enfatizados.
+ */
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
-    val view = LocalView.current
-    val baseColorScheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (dark) dynamicDarkColorScheme(view.context) else dynamicLightColorScheme(view.context)
+    val context = LocalContext.current
+    val colorScheme = remember(dark) {
+        val base = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+                if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            dark -> darkColorScheme()
+            else -> lightColorScheme()
         }
-        dark -> darkColorScheme()
-        else -> lightColorScheme()
+        // A pedido: el fondo más oscuro que las cards (surfaceContainer) en ambos temas.
+        // Se intercambian background <-> surfaceContainer solo si el fondo original es más
+        // claro que las cards; surfaceContainerHigh no se toca.
+        if (base.background.luminance() > base.surfaceContainer.luminance()) {
+            base.copy(
+                background = base.surfaceContainer,
+                surface = base.surfaceContainer,
+                surfaceContainer = base.background
+            )
+        } else {
+            base
+        }
     }
-    // A pedido: se invierte qué tono cumple cada rol, intercambiando directamente
-    // background <-> surfaceContainer (el rol que usan la mayoría de las "stacks"/cards en el
-    // resto del archivo) — quieren el fondo más oscuro que las cards, en los dos temas, igual
-    // que en la referencia. Nada de tokens intermedios: eso fue lo que salió mal la primera vez
-    // (usar surfaceContainerHigh como "el negro" asumiendo que era más oscuro que
-    // surfaceContainer, cuando en esta paleta no lo es). Comparamos luminancia real antes de
-    // intercambiar — si el fondo original ya sale más oscuro que las cards (en cualquiera de
-    // los dos temas, según wallpaper/dispositivo) no hace falta tocar nada. Aplica en claro y
-    // en oscuro por igual. surfaceContainerHigh (lo que usa el pill) no se toca en ningún caso.
-    val colorScheme = if (baseColorScheme.background.luminance() > baseColorScheme.surfaceContainer.luminance()) {
-        baseColorScheme.copy(
-            background = baseColorScheme.surfaceContainer,
-            surface = baseColorScheme.surfaceContainer,
-            surfaceContainer = baseColorScheme.background
+    val shapes = remember {
+        Shapes(
+            extraSmall = RoundedCornerShape(12.dp),
+            small = RoundedCornerShape(16.dp),
+            medium = RoundedCornerShape(22.dp),
+            large = RoundedCornerShape(28.dp),
+            extraLarge = RoundedCornerShape(36.dp)
         )
-    } else {
-        baseColorScheme
     }
-    val shapes = Shapes(
-        extraSmall = RoundedCornerShape(12.dp),
-        small = RoundedCornerShape(16.dp),
-        medium = RoundedCornerShape(22.dp),
-        large = RoundedCornerShape(28.dp),
-        extraLarge = RoundedCornerShape(36.dp)
-    )
-    val font = remember { loadAppFontFamily() }
+    val typography = remember { roundedTypography(loadAppFontFamily()) }
 
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as Activity).window
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !dark
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !dark
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Evita que el sistema dibuje un scrim de contraste encima del color que
-                // ponemos nosotros (algunos fabricantes lo hacen incluso con colores opacos,
-                // y eso lava el tinte hasta que se ve casi blanco).
-                window.isNavigationBarContrastEnforced = false
-                window.isStatusBarContrastEnforced = false
-            }
-            // Transparente en ambos temas: el color real de esa zona ya lo ponen NavScrim +
-            // el pill (difuminado + tinte adaptativo), igual que en el WebUI. Forzar aquí un
-            // color sólido (como antes) tapaba ese degradado con una franja opaca.
-            window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        }
-    }
-
-    LaunchedEffect(colorScheme.primary, colorScheme.background, colorScheme.surface) {
-        val css = colorScheme.toWebCss()
-        withContext(Dispatchers.IO) {
-            Shell.cmd(
-                "mkdir -p $MODDIR/webroot; cat > $MODDIR/webroot/theme.css << 'SDBIND_THEME'\n$css\nSDBIND_THEME"
-            ).exec()
-        }
-    }
-
-    MaterialTheme(
+    MaterialExpressiveTheme(
         colorScheme = colorScheme,
-        typography = roundedTypography(font),
+        motionScheme = MotionScheme.expressive(),
         shapes = shapes,
+        typography = typography,
         content = content
     )
 }
-
-private fun Color.cssHex(): String {
-    val v = toArgb()
-    return String.format("#%02X%02X%02X", (v shr 16) and 0xFF, (v shr 8) and 0xFF, v and 0xFF)
-}
-
-private fun ColorScheme.toWebCss(): String = """
-:root {
-  --bg: ${background.cssHex()};
-  --text: ${onBackground.cssHex()};
-  --muted: ${onSurfaceVariant.cssHex()};
-  --primary: ${primary.cssHex()};
-  --on-primary: ${onPrimary.cssHex()};
-  --surface: ${surfaceContainer.cssHex()};
-  --surface-2: ${surfaceContainerHigh.cssHex()};
-  --danger: ${error.cssHex()};
-  --ok: ${tertiary.cssHex()};
-  --warn: ${secondary.cssHex()};
-  --secondary: ${secondary.cssHex()};
-  --primary-container: ${primaryContainer.cssHex()};
-  --on-surface: ${onSurface.cssHex()};
-}
-""".trimIndent()
