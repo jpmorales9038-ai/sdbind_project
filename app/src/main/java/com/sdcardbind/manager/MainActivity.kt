@@ -19,6 +19,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -60,6 +61,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.SdCard
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -419,7 +421,7 @@ fun BindApp() {
                     userScrollEnabled = true
                 ) { page ->
                     when (page) {
-                        1 -> LogPane(log, onClear = { clearLogNow() })
+                        1 -> LogPane(log, onClear = { clearLogNow() }, onRefresh = { refresh() })
                         2 -> AboutPane(
                             busy = busy,
                             onCheck = {
@@ -653,6 +655,26 @@ private fun NoRoot() {
     }
 }
 
+/** Contenedor "deslizar para refrescar": ejecuta [onRefresh] y mantiene el indicador un instante. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PullRefresh(onRefresh: () -> Unit, content: @Composable () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            scope.launch {
+                refreshing = true
+                onRefresh()
+                delay(1200)
+                refreshing = false
+            }
+        },
+        modifier = Modifier.fillMaxSize()
+    ) { content() }
+}
+
 @Composable
 private fun HomePane(
     volumes: List<StorageVolume>,
@@ -670,7 +692,7 @@ private fun HomePane(
     val active = entries.any { it.status == "MOUNTED" }
     val hasExternal = volumes.any { it.kind == VolumeKind.EXTERNAL }
     val header: @Composable () -> Unit = {
-        UiHeader("SD Bind") {
+        UiHeader(stringResource(R.string.tab_home)) {
             IconButton(onClick = onInfo) { Icon(Icons.Filled.Info, contentDescription = stringResource(R.string.about)) }
             IconButton(onClick = onRefreshStorage) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.storage_updated)) }
         }
@@ -694,6 +716,7 @@ private fun HomePane(
             AddBindButton(hasExternal, onAdd)
         }
     }
+    PullRefresh(onRefresh = onRefreshStorage) {
     if (landscape) {
         Row(Modifier.fillMaxSize().padding(horizontal = UiScreenPadding)) {
             Column(
@@ -724,6 +747,7 @@ private fun HomePane(
             }
             Spacer(Modifier.height(UiNavClearance))
         }
+    }
     }
 }
 
@@ -848,7 +872,8 @@ private fun StorageCell(
 @Composable
 private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: Boolean = false, playToken: Int = 0) {
     val cs = MaterialTheme.colorScheme
-    val effects = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+    // Llenado lento y suave (antes: slowEffectsSpec del motionScheme).
+    val effects = tween<Float>(durationMillis = 2200, easing = EaseInOutCubic)
     val anim = remember { Animatable(0f) }
     var lastToken by remember { mutableIntStateOf(playToken) }
     LaunchedEffect(playToken, percent) {
@@ -997,13 +1022,10 @@ private fun StatusChip(status: String) {
     )
 }
 
-/** Logo estático de la app (fondo + primer plano del icono launcher). */
+/** Logo estático de la app: el mismo icono del launcher, tal cual. */
 @Composable
 private fun AppLogo(modifier: Modifier = Modifier) {
-    Box(modifier.clip(RoundedCornerShape(28.dp))) {
-        Image(painterResource(R.mipmap.ic_launcher_background), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        Image(painterResource(R.mipmap.ic_launcher_foreground), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-    }
+    Image(painterResource(R.mipmap.ic_launcher), contentDescription = null, modifier = modifier)
 }
 
 @Composable
@@ -1210,7 +1232,7 @@ private fun LogRow(line: LogLine) {
 }
 
 @Composable
-private fun LogPane(log: String, onClear: () -> Unit) {
+private fun LogPane(log: String, onClear: () -> Unit, onRefresh: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1235,6 +1257,7 @@ private fun LogPane(log: String, onClear: () -> Unit) {
     val firstShown by remember { derivedStateOf { listState.firstVisibleItemIndex } }
     val lastShown by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 } }
 
+    PullRefresh(onRefresh = onRefresh) {
     Column(Modifier.fillMaxSize()) {
         UiHeader(stringResource(R.string.log)) {
             IconButton(onClick = {
@@ -1355,6 +1378,7 @@ private fun LogPane(log: String, onClear: () -> Unit) {
                 ) { Icon(Icons.Filled.VerticalAlignBottom, contentDescription = stringResource(R.string.log_scroll_bottom)) }
             }
         }
+    }
     }
 }
 
