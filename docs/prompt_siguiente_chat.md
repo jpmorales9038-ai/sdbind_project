@@ -10,7 +10,7 @@ Continúo el trabajo en mi app Android **SD Bind** (Kotlin + Jetpack Compose + M
 
 ## Tarea en curso
 Ninguna pendiente. (Si un chat anterior dejó algo a medias, aquí va qué se hizo y qué falta.)
-Nota v2.9.6: el flasheo del módulo desde la app (`Updater.flashModuleZip`) no se ha probado en un dispositivo; si falla, pega el texto que muestra la tarjeta.
+Notas v2.9.7 (sin probar en dispositivo): (1) flasheo del módulo desde la app (`Updater.flashModuleZip`); si falla, pega el texto de la tarjeta. (2) tarjeta «Rendimiento» de Ajustes: si algún ajuste no hace efecto, pega las líneas «Rendimiento:» del registro. No se ha podido compilar el APK en el chat: si el CI da error de compilación, pega el log.
 
 ## Reglas
 - No cambies `RootOps.kt` ni la firma/`applicationId`; solo colores del `ColorScheme`; cada texto nuevo va en los tres `strings.xml` (es, es-rES, en).

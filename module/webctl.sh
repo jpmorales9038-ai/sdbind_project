@@ -128,6 +128,12 @@ case "$1" in
         echo "DONE"
         ;;
 
+    perf)
+        # La app guardó ajustes de rendimiento en perf.conf: se aplican ya (lectura anticipada).
+        perf_apply
+        echo "DONE"
+        ;;
+
     anyvolpresent)
         # Lo usa la app antes de reaccionar a ACTION_MEDIA_UNMOUNTED/REMOVED/BAD_REMOVAL: esos
         # broadcasts de Android pueden dispararse igual aunque la SD/OTG siga físicamente
@@ -173,6 +179,6 @@ case "$1" in
         ;;
 
     *)
-        echo "Uso: webctl.sh {apply|unmount|remove <origen> <destino>|status|detect|list_children <ruta>|subdirs <ruta>|entries <ruta>|rm <ruta> [dir]|prune|log|fulllog|clearlog|anyvolpresent|storage}"
+        echo "Uso: webctl.sh {apply|unmount|remove <origen> <destino>|status|detect|list_children <ruta>|subdirs <ruta>|entries <ruta>|rm <ruta> [dir]|prune|perf|log|fulllog|clearlog|anyvolpresent|storage}"
         ;;
 esac

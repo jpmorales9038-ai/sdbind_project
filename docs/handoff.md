@@ -3,7 +3,7 @@
 > Léelo completo antes de tocar código.
 > Teléfono: `/storage/emulated/0/Download/sdbind_project/` · Rama: **`preview`**
 > CI (`.github/workflows/build.yml`): compila en push a `main` y `preview`; en `preview` publica pre-release `v<versión>-preview.<run>`. El zip del módulo se llama `sdcard_bind_ui_con_app_v<versión>[-preview.<run>].zip`.
-> Estado: **v2.9.6** (app 110 / módulo 360). Todo lo anterior está resuelto; solo se documenta lo vigente.
+> Estado: **v2.9.7** (app 111 / módulo 361). Todo lo anterior está resuelto; solo se documenta lo vigente.
 
 ## 1. Objetivo de estilo
 Estilo propio (no un clon) inspirado en una app de ajustes de audio (las capturas de referencia ya se borraron): título grande con acciones, cards muy redondeadas, tarjeta principal con interruptor y barra de navegación flotante en píldora. La funcionalidad no cambia. Sin gráficos decorativos de ecualizador, fuentes redondeadas y negrita en títulos, icono propio.
@@ -40,10 +40,11 @@ Estilo propio (no un clon) inspirado en una app de ajustes de audio (las captura
   - Deslizar en Ajustes (`PullRefreshAwait` → `UpdateController.refresh()`): repite la búsqueda al momento, con mensajes ("Ya estás al día" solo si el módulo no está desfasado ni pendiente de reinicio; errores). El APK ya descargado se reutiliza (`ready_version` en prefs + `cacheDir/sdbind_update.apk`).
   - Si la versión de la app ≠ la de `module.prop` (o `/data/adb/modules_update/<id>/`) la tarjeta pasa a ámbar con "Descargar y flashear módulo" (si a la vez hay una actualización lista, manda el verde y el botón de flashear espera a que se instale) El botón flashea **desde la propia app**, sin gestor: `UpdateController.flashModule()` → `Updater.flashModuleZip` copia el zip a `/data/local/tmp`, ejecuta con root `ksud module install` / `apd module install` / `magisk --install-module` en un proceso desligado (el `customize.sh` hace `pm install -r` de la app y mata el proceso; el script relanza la app) y muestra las últimas líneas del instalador en la tarjeta. Sin instalador → mensaje; ya no hay selector de gestores ni `<queries>` en el manifest. **Sin probar en dispositivo**: si `module install` falla en tu ROOT, el log sale en la tarjeta.
   - Semver: la final > sus pre-releases (`2.9.3` > `2.9.3-preview.99`); `compareBase`/`sameVersion` comparan solo números (módulo sin sufijo), `sameBuild` la build exacta.
-  - `versionName = "2.9.5$buildSuffix"`; el CI pasa `-PbuildSuffix="-preview.<run>"`. **No pongas el sufijo a mano.**
+  - `versionName = "2.9.x$buildSuffix"`; el CI pasa `-PbuildSuffix="-preview.<run>"`. **No pongas el sufijo a mano.**
   - Gotcha: tras instalar una **final** (`main`), las pre-releases de esa misma versión dejan de ofrecerse; sube versión (app y módulo a la vez) antes de seguir en `preview`.
   - Limitación: la actualización de la app requiere root y la misma firma; sin root no hay instalador de respaldo.
   - Zip del módulo ("Descargar y flashear módulo"): `Updater.downloadModule` lo guarda en caché y en `Download/` (copia de respaldo) con el nombre versionado del asset (`sdcard_bind_ui_con_app_v<versión>.zip`) y borra antes las versiones antiguas (`sdcard_bind_ui.zip`, `sdcard_bind_ui_con_app_v*.zip`).
+- Rendimiento (Ajustes, `PerformanceCard.kt` + `PerfSettings.kt`; **sin tocar `RootOps.kt`**): `PerfController` lee/escribe `$MODDIR/perf.conf` (`readahead_kb`, `watch_interval`, `light_guard`, `fast_label`, formato `clave=número`) con libsu y ejecuta `webctl.sh perf` (→ `perf_apply`). El módulo (`functions.sh`: `perf_load`, `perf_tune_src`, `perf_restore`, `_protect_media_fuse` con caché de PIDs, `_label_skippable`) lo lee con solo builtins en cada vuelta de `service.sh`. Sin `perf.conf` todo se comporta como antes. `customize.sh` conserva `perf.conf` al actualizar; `uninstall.sh` y «Sistema» devuelven `read_ahead_kb` (originales en `.watch_grace/.ra_orig_*`). Los mensajes del log empiezan por «Rendimiento:» (nivel INFO). **Sin probar en dispositivo**: la lectura anticipada depende de que el sysfs del disco sea escribible; si no, se registra y no se cambia nada.
 - Barra de navegación: pestañas Inicio (`Home`), Registro (`Notes`) y Ajustes (icono `Settings`, la tuerca). En apaisado la píldora va abajo a la izquierda (`BottomStart`) y no hay `UiBottomFade`.
 - Sin cambios: `RootOps.kt`, selector de carpetas, explorador.
 
@@ -64,12 +65,12 @@ Estilo propio (no un clon) inspirado en una app de ajustes de audio (las captura
 Una línea por comando; el zip no trae carpeta raíz y se extrae encima conservando `.git`.
 
 ```bash
-cd /storage/emulated/0/Download && unzip -o sdbind_project_v2.9.6.zip -d sdbind_project
+cd /storage/emulated/0/Download && unzip -o sdbind_project_v2.9.7.zip -d sdbind_project
 cd sdbind_project
 git add -A
-git commit -m "feat: flasheo del módulo desde la app sin gestor, tuerca en la píldora, sin 'al día' si el módulo está desfasado y registro apaisado optimizado (v2.9.6)"
+git commit -m "feat: tarjeta Rendimiento en Ajustes (lectura anticipada de la SD/OTG, vigilancia configurable, vigilante ligero y montaje rápido) (v2.9.7)"
 git push origin preview
 cinotif
 ```
 
-No hay archivos que borrar (`rm`) en esta entrega: no se elimina ni renombra ningún archivo del proyecto.
+No hay archivos que borrar (`rm`) en esta entrega: solo se añaden `PerfSettings.kt` y `PerformanceCard.kt`.

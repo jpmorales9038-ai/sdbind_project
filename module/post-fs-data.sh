@@ -11,6 +11,9 @@ rm -f "$NOHEAL_MARKER" 2>/dev/null
 # de la sesión anterior. Al arrancar de nuevo, el self-heal debería estar disponible desde el
 # vamos para cualquier entrada, no seguir bloqueado por algo que pasó antes de reiniciar.
 rm -f "$MISS_DIR"/.disc_* 2>/dev/null
+# Los originales de lectura anticipada son de la sesión anterior (el kernel ya los restableció).
+rm -f "$MISS_DIR"/.ra_orig_* 2>/dev/null
+perf_load
 _protect_media_fuse
 
 log "== post-fs-data: intento temprano de montaje =="

@@ -300,6 +300,11 @@ fun BindApp() {
     // Actualizaciones: estado de la tarjeta de Ajustes. Cada vez que la app vuelve a primer plano
     // se compara la versión de la app con la del módulo (ámbar si no coinciden).
     val updates = remember { UpdateController(context) }
+    // Ajustes de rendimiento (perf.conf del módulo): se leen una vez con root.
+    val perf = remember { PerfController() }
+    LaunchedEffect(rootOk) {
+        if (rootOk == true) perf.load()
+    }
     LaunchedEffect(rootOk) {
         if (rootOk != true) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -442,6 +447,7 @@ fun BindApp() {
                         2 -> AboutPane(
                             updates = updates,
                             onInstallUpdate = { scope.launch { updates.installReady() } },
+                            perf = perf,
                             onRefresh = { updates.refresh() },
                             onFlashModule = { scope.launch { updates.flashModule() } }
                         )
@@ -1039,6 +1045,7 @@ private fun AppLogo(modifier: Modifier = Modifier) {
 private fun AboutPane(
     updates: UpdateController,
     onInstallUpdate: () -> Unit,
+    perf: PerfController,
     onRefresh: suspend () -> Unit,
     onFlashModule: () -> Unit
 ) {
@@ -1065,6 +1072,8 @@ private fun AboutPane(
             }
             Spacer(Modifier.height(16.dp))
             UpdatesCard(updates, onInstallUpdate = onInstallUpdate, onFlashModule = onFlashModule)
+            Spacer(Modifier.height(16.dp))
+            PerformanceCard(perf)
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 AboutMiniCard(
@@ -1134,6 +1143,7 @@ private fun logLevelOf(msg: String): LogLevel {
     val m = msg.lowercase()
     return when {
         listOf("fallo", "error", "no se pudo", "denied", "failed", "bad ").any { it in m } -> LogLevel.ERROR
+        m.startsWith("rendimiento") -> LogLevel.INFO
         m.startsWith("ok") || "reapareció" in m || "salvó" in m -> LogLevel.SUCCESS
         listOf("omitido", "ausente", "ram baja", "auto-desmontado", "caído", "recién insertado", "cuenta de gracia").any { it in m } -> LogLevel.WARN
         listOf("desmontado", "ya montado", "eliminado", "borrado", "montado").any { it in m } -> LogLevel.INFO

@@ -129,4 +129,17 @@
     <string name="upd_module_flashing">Flashing the module…</string>
     <string name="upd_module_no_installer">No rooted KernelSU, APatch or Magisk found to install the module</string>
     <string name="upd_module_flash_failed">Couldn’t flash the module. Check the log above</string>
+    <string name="perf_title">Performance</string>
+    <string name="perf_desc">Optional settings to make binds run better. They are saved and applied right away; with everything at its default nothing changes.</string>
+    <string name="perf_save_failed">Could not save the setting. Check the log</string>
+    <string name="perf_system">System</string>
+    <string name="perf_readahead_title">SD/OTG read-ahead</string>
+    <string name="perf_readahead_desc">Reads more data from the drive in advance. Helps with large files (games, videos, music); barely noticeable with many small files. Goes back to the system value on reboot or when you pick “System”.</string>
+    <string name="perf_interval_title">Drive monitoring</string>
+    <string name="perf_interval_desc">How often, in seconds, the module checks that the SD/OTG is still there. A longer gap uses less CPU and battery; 1 s notices a drop sooner.</string>
+    <string name="perf_light_title">Light watchdog</string>
+    <string name="perf_light_desc">Remembers the protected processes instead of scanning all of them on every check. Less background CPU, with the same protection against low-RAM kills.</string>
+    <string name="perf_fast_title">Fast mount</string>
+    <string name="perf_fast_desc">Skips the recursive SELinux relabel on FAT, exFAT or NTFS cards, which do not support labels. Binds with many folders mount sooner.</string>
+    <string name="perf_hint">Tested on few devices: if you notice problems, go back to “System” and turn the switches off.</string>
 </resources>

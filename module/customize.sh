@@ -16,6 +16,12 @@ if [ ! -f "$CONF" ] && [ -f "$OLD" ]; then
     ui_print "- Vínculos de la instalación anterior preservados"
 fi
 
+# Ajustes de rendimiento (perf.conf): misma razón que mounts.conf, no se pierden al actualizar.
+OLDP="/data/adb/modules/sdcard_bind_ui/perf.conf"
+if [ ! -f "$MODPATH/perf.conf" ] && [ -f "$OLDP" ]; then
+    cp -f "$OLDP" "$MODPATH/perf.conf" 2>/dev/null
+fi
+
 if [ ! -f "$CONF" ]; then
     cat > "$CONF" << 'EOF'
 # Formato: ORIGEN|DESTINO|HABILITADO(1/0)
@@ -26,6 +32,7 @@ fi
 
 touch "$LOG"
 chmod 644 "$CONF" "$LOG" 2>/dev/null
+[ -f "$MODPATH/perf.conf" ] && chmod 644 "$MODPATH/perf.conf" 2>/dev/null
 chmod 755 "$MODPATH/webctl.sh" "$MODPATH/service.sh" "$MODPATH/post-fs-data.sh" "$MODPATH/uninstall.sh" "$MODPATH/common/functions.sh" 2>/dev/null
 
 APK="$MODPATH/app/sdcard-bind-manager.apk"

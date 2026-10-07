@@ -10,18 +10,74 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG"
 }
 
+# ---------------------------------------------------------------------------------------
+# Ajustes de rendimiento (los escribe la app en $MODDIR/perf.conf, formato clave=número).
+# Todos son opcionales; sin perf.conf el comportamiento es exactamente el de siempre.
+#   readahead_kb  0 (no tocar) | 512 | 1024 | 2048  -> lectura anticipada de la SD/OTG
+#   watch_interval 1 | 2 | 5                          -> segundos entre chequeos del vigilante
+#   light_guard   0/1                                 -> protección de MediaProvider con caché de PIDs
+#   fast_label    0/1                                 -> omitir "chcon -R" donde no puede aplicarse
+# perf_load usa solo builtins (se llama en cada vuelta del vigilante, no debe lanzar procesos).
+# ---------------------------------------------------------------------------------------
+[ -n "$PERF_CONF" ] || PERF_CONF="$MODDIR/perf.conf"
+
+perf_load() {
+    PERF_RA=0; PERF_INTERVAL=1; PERF_LIGHT=0; PERF_FASTLABEL=0
+    if [ -r "$PERF_CONF" ]; then
+        while IFS='=' read -r pf_k pf_v || [ -n "$pf_k" ]; do
+            case "$pf_v" in ''|*[!0-9]*) continue ;; esac
+            case "$pf_k" in
+                readahead_kb) PERF_RA="$pf_v" ;;
+                watch_interval) PERF_INTERVAL="$pf_v" ;;
+                light_guard) PERF_LIGHT="$pf_v" ;;
+                fast_label) PERF_FASTLABEL="$pf_v" ;;
+            esac
+        done < "$PERF_CONF"
+    fi
+    case "$PERF_RA" in 0|512|1024|2048) ;; *) PERF_RA=0 ;; esac
+    case "$PERF_INTERVAL" in 1|2|5) ;; *) PERF_INTERVAL=1 ;; esac
+    case "$PERF_LIGHT" in 1) ;; *) PERF_LIGHT=0 ;; esac
+    case "$PERF_FASTLABEL" in 1) ;; *) PERF_FASTLABEL=0 ;; esac
+}
+
 # En Android moderno, /storage/emulated/0 lo sirve el proceso de MediaProvider vía FUSE.
 # Bajo RAM crítica el kernel puede matar/reiniciar ese proceso como último recurso, lo que
 # se lleva puesto cualquier --rbind montado encima de su punto de montaje. Bajarle el
 # oom_score_adj lo pone casi al nivel de system_server, así el OOM killer prefiere matar
 # otra cosa antes. Se reaplica cada ciclo por si el proceso reapareciera con otro PID.
+#
+# Con "Vigilante ligero" (PERF_LIGHT=1) no se recorre /proc entero cada ciclo (cientos de
+# procesos, dos forks por cada uno): se recuerdan los PIDs ya protegidos y solo se comprueba
+# que sigan en -1000. Si alguno desaparece o cambia (proceso reiniciado, PID reutilizado) o
+# pasan 20 ciclos, se hace el recorrido completo de siempre.
+_PMF_PIDS=""
+_PMF_N=0
 _protect_media_fuse() {
+    if [ "$PERF_LIGHT" = "1" ] && [ -n "$_PMF_PIDS" ]; then
+        _PMF_N=$((_PMF_N + 1))
+        if [ "$_PMF_N" -lt 20 ]; then
+            pf_ok=1
+            for pf_pid in $_PMF_PIDS; do
+                pf_adj=""
+                read -r pf_adj 2>/dev/null < "/proc/$pf_pid/oom_score_adj"
+                [ "$pf_adj" = "-1000" ] || { pf_ok=0; break; }
+            done
+            [ "$pf_ok" = "1" ] && return 0
+        fi
+    fi
+    _protect_media_scan
+}
+
+_protect_media_scan() {
+    _PMF_N=0
+    pf_found=""
     for pdir in /proc/[0-9]*; do
         pid="${pdir#/proc/}"
         cmdline=$(tr '\0' ' ' < "$pdir/cmdline" 2>/dev/null)
         [ -n "$cmdline" ] || continue
         case "$cmdline" in
             *media.module*|*providers.media*|*android.process.media*)
+                pf_found="$pf_found $pid"
                 current=$(cat "$pdir/oom_score_adj" 2>/dev/null)
                 [ "$current" = "-1000" ] && continue
                 echo -1000 > "$pdir/oom_score_adj" 2>/dev/null
@@ -33,6 +89,91 @@ _protect_media_fuse() {
                 ;;
         esac
     done
+    _PMF_PIDS="$pf_found"
+}
+
+# Carpeta queue/ (sysfs) del disco que respalda a la SD/OTG que contiene a $1. Vacío si no
+# se puede resolver (p. ej. volumen adoptado sobre dm-crypt): en ese caso no se toca nada.
+_queue_dir_for() {
+    pf_root=$(_media_root_for "$1") || return 1
+    pf_id="${pf_root##*/}"
+    for pf_mp in "$pf_root" "/mnt/media_rw/$pf_id" "/mnt/expand/$pf_id"; do
+        pf_dev=$(awk -v m="$pf_mp" '$2 == m { d = $1 } END { print d }' /proc/1/mounts 2>/dev/null)
+        [ -n "$pf_dev" ] && [ -e "$pf_dev" ] || continue
+        pf_mm=$(stat -L -c '%t:%T' "$pf_dev" 2>/dev/null) || continue
+        pf_hx1="${pf_mm%%:*}"; pf_hx2="${pf_mm##*:}"
+        case "$pf_hx1$pf_hx2" in ''|*[!0-9a-fA-F]*) continue ;; esac
+        [ -n "$pf_hx1" ] && [ -n "$pf_hx2" ] || continue
+        pf_sys=$(readlink -f "/sys/dev/block/$((0x$pf_hx1)):$((0x$pf_hx2))" 2>/dev/null)
+        [ -n "$pf_sys" ] && [ -d "$pf_sys" ] || continue
+        [ -f "$pf_sys/partition" ] && pf_sys="${pf_sys%/*}"
+        if [ -d "$pf_sys/queue" ]; then
+            echo "$pf_sys/queue"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Sube la lectura anticipada del disco de $1 al valor elegido (guardando el original para poder
+# devolverlo). No persiste tras reiniciar ni al sacar la unidad: se reaplica en cada montaje.
+perf_tune_src() {
+    [ "${PERF_RA:-0}" -gt 0 ] 2>/dev/null || return 0
+    pf_q=$(_queue_dir_for "$1") || return 0
+    pf_f="$pf_q/read_ahead_kb"
+    [ -w "$pf_f" ] || return 0
+    pf_cur=$(cat "$pf_f" 2>/dev/null)
+    case "$pf_cur" in ''|*[!0-9]*) return 0 ;; esac
+    pf_disk="${pf_q%/queue}"; pf_disk="${pf_disk##*/}"
+    mkdir -p "$MISS_DIR" 2>/dev/null
+    [ -f "$MISS_DIR/.ra_orig_$pf_disk" ] || echo "$pf_q $pf_cur" > "$MISS_DIR/.ra_orig_$pf_disk" 2>/dev/null
+    [ "$pf_cur" = "$PERF_RA" ] && return 0
+    if echo "$PERF_RA" > "$pf_f" 2>/dev/null; then
+        log "Rendimiento: lectura anticipada de $pf_disk $pf_cur -> $PERF_RA KB"
+    else
+        log "Rendimiento: no se pudo cambiar la lectura anticipada de $pf_disk"
+    fi
+}
+
+# Devuelve la lectura anticipada original a los discos que se tocaron.
+perf_restore() {
+    for pf_orig in "$MISS_DIR"/.ra_orig_*; do
+        [ -f "$pf_orig" ] || continue
+        pf_q=""; pf_val=""
+        read -r pf_q pf_val < "$pf_orig"
+        pf_disk="${pf_orig##*/.ra_orig_}"
+        if [ -n "$pf_q" ] && [ -w "$pf_q/read_ahead_kb" ] && echo "$pf_val" > "$pf_q/read_ahead_kb" 2>/dev/null; then
+            log "Rendimiento: lectura anticipada de $pf_disk restaurada a $pf_val KB"
+        fi
+        rm -f "$pf_orig" 2>/dev/null
+    done
+}
+
+_perf_cb() {
+    [ "$3" = "1" ] || return 0
+    perf_tune_src "$1"
+}
+
+# Lo llama webctl.sh (perf) cuando la app guarda ajustes: aplica ya, sin esperar a un montaje.
+perf_apply() {
+    perf_load
+    if [ "$PERF_RA" = "0" ]; then
+        perf_restore
+    else
+        each_entry _perf_cb
+    fi
+}
+
+# El FS de la SD/OTG (FAT/exFAT/NTFS) no admite etiquetas SELinux: ahí "chcon -R" solo recorre
+# todo el árbol fallando archivo por archivo. Con "Montaje rápido" se omite en esos casos.
+_label_skippable() {
+    [ "$PERF_FASTLABEL" = "1" ] || return 1
+    pf_root=$(_media_root_for "$1") || return 1
+    pf_fs=$(awk -v m="$pf_root" '$2 == m { t = $3 } END { print t }' /proc/1/mounts 2>/dev/null)
+    case "$pf_fs" in
+        vfat|msdos|exfat|sdfat|texfat|ntfs|ntfs3|fuseblk) return 0 ;;
+    esac
+    return 1
 }
 
 ensure_slash() {
@@ -118,6 +259,7 @@ wait_for_path() {
 mount_one() {
     SRC=$(ensure_slash "$1")
     DEST=$(ensure_slash "$2")
+    perf_load
 
     if is_protected "$DEST"; then
         log "FALLO (destino inseguro, elegí una subcarpeta): $DEST"
@@ -145,8 +287,13 @@ mount_one() {
     # soporta ese flag, cae a su modo de buscar en /etc/fstab -que no existe en Android- y
     # llenaba el log con "mount: bad /etc/fstab". Se saca: --rbind solo ya funciona bien.)
     if run_global mount --rbind "$(strip_slash "$SRC")" "$(strip_slash "$DEST")" 2>>"$LOG"; then
-        run_global chcon -R u:object_r:media_rw_data_file:s0 "$(strip_slash "$DEST")" 2>/dev/null
+        if _label_skippable "$SRC"; then
+            log "Rendimiento: etiquetado SELinux omitido (el sistema de archivos no admite etiquetas)"
+        else
+            run_global chcon -R u:object_r:media_rw_data_file:s0 "$(strip_slash "$DEST")" 2>/dev/null
+        fi
         log "OK: $SRC -> $DEST"
+        perf_tune_src "$SRC"
         return 0
     else
         log "FALLO (mount): $SRC -> $DEST"

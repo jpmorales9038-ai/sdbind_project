@@ -129,4 +129,17 @@
     <string name="upd_module_flashing">Flasheando el módulo…</string>
     <string name="upd_module_no_installer">No se ha encontrado KernelSU, APatch ni Magisk con root para instalar el módulo</string>
     <string name="upd_module_flash_failed">No se ha podido flashear el módulo. Revisa el registro de arriba</string>
+    <string name="perf_title">Rendimiento</string>
+    <string name="perf_desc">Ajustes opcionales para que los vínculos rindan mejor. Se guardan y se aplican al momento; con todo en su valor inicial no cambia nada.</string>
+    <string name="perf_save_failed">No se ha podido guardar el ajuste. Consulta el registro</string>
+    <string name="perf_system">Sistema</string>
+    <string name="perf_readahead_title">Lectura anticipada de la SD/OTG</string>
+    <string name="perf_readahead_desc">Lee por adelantado más datos de la unidad. Ayuda con archivos grandes (juegos, vídeos, música); con muchos archivos pequeños apenas se nota. Vuelve al valor del sistema al reiniciar o al elegir «Sistema».</string>
+    <string name="perf_interval_title">Vigilancia de la unidad</string>
+    <string name="perf_interval_desc">Cada cuántos segundos el módulo comprueba que la SD/OTG sigue ahí. Más espacio entre comprobaciones gasta menos CPU y batería; 1 s detecta antes una caída.</string>
+    <string name="perf_light_title">Vigilante ligero</string>
+    <string name="perf_light_desc">Recuerda los procesos protegidos en lugar de recorrerlos todos en cada comprobación. Menos CPU en segundo plano; mantiene la misma protección frente a cierres por poca RAM.</string>
+    <string name="perf_fast_title">Montaje rápido</string>
+    <string name="perf_fast_desc">Omite el etiquetado SELinux recursivo en tarjetas FAT, exFAT o NTFS, que no admiten etiquetas. Los vínculos con muchas carpetas se montan antes.</string>
+    <string name="perf_hint">Probado en pocos equipos: si notas fallos, vuelve a «Sistema» y desactiva los interruptores.</string>
 </resources>

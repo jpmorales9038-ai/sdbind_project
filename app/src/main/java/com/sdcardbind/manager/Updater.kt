@@ -40,7 +40,7 @@ data class ModuleInfo(val version: String, val pendingReboot: Boolean)
 object Updater {
 
     const val DEFAULT_REPO = "jpmorales9038-ai/sdbind_project"
-    // Nombre base del zip del módulo (el asset de la release lleva la versión: ..._v2.9.6.zip).
+    // Nombre base del zip del módulo (el asset de la release lleva la versión: ..._v2.9.7.zip).
     private const val ZIP_NAME = "sdcard_bind_ui.zip"
     private const val ZIP_GLOB = "sdcard_bind_ui_con_app_v*.zip"
     private const val DOWNLOAD_DIR = "/storage/emulated/0/Download"
@@ -303,7 +303,7 @@ object Updater {
 
     // ---------------------------------------------------------------- descarga del módulo
 
-    /** Nombre del zip con la versión, el mismo del asset de la release (sdcard_bind_ui_con_app_v2.9.6.zip). */
+    /** Nombre del zip con la versión, el mismo del asset de la release (sdcard_bind_ui_con_app_v2.9.7.zip). */
     private fun moduleZipName(rel: ReleaseInfo): String {
         val raw = rel.zipUrl?.substringBefore('?')?.substringAfterLast('/').orEmpty()
         val clean = raw.replace(Regex("[^A-Za-z0-9._-]"), "_")
