@@ -40,13 +40,14 @@ Decisiones del usuario (ya aplicadas):
     card Almacenamiento (long-press sigue refrescando); card Vínculos con lista y botón "Añadir vínculo" (reemplaza al FAB).
   - **Interruptor**: ON = `RootOps.saveAndApply(entries)`; OFF = `unmountAllNow()`. Estado = `entries.any { status == "MOUNTED" }`.
     Sin SD/OTG o sin vínculos muestra snackbar en vez de actuar.
-  - **Registro**: header con Compartir y Borrar. **Ajustes** (antes "Acerca de"): mismas cards.
+  - **Registro** (`LogPane`): visor tipo terminal. Parsea `mount.log` (`YYYY-MM-DD HH:MM:SS mensaje`) en `LogLine` con nivel (`LogLevel`: E/W/S/I/D) y etiqueta (`LogTag`: MONTAJE/DESMONTAJE/VIGILANCIA/SISTEMA) por palabras clave en `logLevelOf`/`logTagOf` (si cambian los mensajes del módulo, hay que ajustarlas). Cada línea: barra lateral de color, letra de nivel, hora, chip de etiqueta y mensaje en monoespaciada; colores: error=`error`, aviso=ámbar, éxito=verde, info=`primary` (ámbar/verde fijos, como el semáforo de `StatusChip`). Cabecera con Compartir y Borrar, contador "Líneas a–b de n", buscador en píldora, filtro por nivel (FilterChip) y botones flotantes ir al inicio/final. Arranca en la última línea.
+  - **Anillo de almacenamiento**: ahora `CircularProgressIndicator` plano (se quitó la animación ondulada infinita). Solo anima el llenado 0→valor al refrescar (mantener presionado) o al cambiar el porcentaje. **Ajustes** (antes "Acerca de"): mismas cards.
 - `ui/Theme.kt`: `SideEffect` que fija `isAppearanceLightStatusBars/NavigationBars = !dark` con el tema **actual**
   (la Activity maneja `uiMode` sin recrearse, y `enableEdgeToEdge()` solo decide al crearla → iconos con el color viejo).
 - `ui/Fonts.kt`: la familia ahora se arma con **pesos reales** (400–800). Antes se envolvía un solo `Typeface` y Compose
   ignoraba el peso, por eso la negrita no se veía. Busca Google Sans Rounded/Flex en `/system/fonts`; si no hay, prueba
   familias del sistema por nombre.
-- **Icono**: nuevo (SD rosa + carpeta morada + enlace). PNGs en `res/mipmap-xxhdpi/` (`ic_launcher_foreground` con fondo transparente, `ic_launcher_background` sólido #1F1A26, y las versiones legacy cuadrada/redonda) y `module/icon.png`. Los XML adaptativos no cambiaron.
+- **Icono**: cadena diagonal de dos eslabones entrelazados (cian `#2CC6D9` + coral `#FF7054`) con sombra larga sobre fondo azul marino `#262C6B`. PNGs en `res/mipmap-xxhdpi/` (`ic_launcher_foreground` transparente con la sombra incluida, `ic_launcher_background` sólido, y las versiones legacy cuadrada/redonda) y `module/icon.png`. Los XML adaptativos no cambiaron. `module/banner.*` sigue con el diseño anterior.
 - **Ajustes**: se eliminó `AppMark` (círculos animados); ahora `AppLogo` muestra el icono estático (mismos mipmaps de fondo + primer plano).
 - Strings nuevas en los 3 idiomas: `tab_settings`, `use_binds`, `state_on`, `state_off`.
 - Sin cambios: `RootOps`, `Updater`, selector de carpetas y explorador.
@@ -55,7 +56,7 @@ Decisiones del usuario (ya aplicadas):
 - El primer CI falló por un import faltante (`getValue` en el kit); corregido. El código de esta versión **no se pudo compilar
   en el chat** (sin red): revisar el resultado de Actions en `preview`.
 - Riesgo de API en esta versión: `Font(file, weight, variationSettings)`, `Font(DeviceFontFamilyName(..), weight)` y
-  `@file:OptIn(ExperimentalTextApi)` en `Fonts.kt`; `Switch(thumbContent)`; `Button(shapes, colors)`.
+  `@file:OptIn(ExperimentalTextApi)` en `Fonts.kt`; `Switch(thumbContent)`; `CircularProgressIndicator(progress, strokeWidth, strokeCap)`; `SmallFloatingActionButton`; `FilterChip`; `Button(shapes, colors)`.
 - **Limitación de fuentes**: si el teléfono no trae una fuente redondeada en `/system/fonts`, no hay forma de "redondear"
   solo con código. Solución definitiva: meter un `.ttf` redondeado (p. ej. Nunito) en `app/src/main/res/font/` y usarlo
   como familia base. No se pudo bundlear en el chat por no haber red.
@@ -80,7 +81,7 @@ El zip no trae carpeta raíz, por eso `-d sdbind_project`. Se extrae encima y co
 
 ```bash
 cd /storage/emulated/0/Download && unzip -o sdbind_project.zip -d sdbind_project
-cd sdbind_project && git add -A && git commit -m "feat(ui): nuevo icono, difuminado inferior, hero sólido y fuentes más pequeñas" && git push origin preview
+cd sdbind_project && git add -A && git commit -m "feat(ui): visor de registro con colores, anillo sin animación infinita, nuevo icono" && git push origin preview
 ```
 
 `unzip` no borra archivos que ya no existan: si un cambio elimina alguno (p. ej. al renombrar), bórralo a mano antes del commit.

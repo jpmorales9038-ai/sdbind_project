@@ -43,6 +43,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -65,9 +67,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -76,6 +80,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -855,17 +861,16 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
     }
     val track = if (secondary) cs.secondaryContainer else cs.primaryContainer
     val arc = if (secondary) cs.secondary else cs.primary
-    val strokePx = with(LocalDensity.current) { 8.dp.toPx() }
-    val stroke = remember(strokePx) { Stroke(width = strokePx, cap = StrokeCap.Round) }
     Box(modifier, contentAlignment = Alignment.Center) {
-        // Anillo ondulado Expressive: la "ola" marca visualmente el progreso.
-        CircularWavyProgressIndicator(
+        // Anillo plano (el ondulado tenía una animación infinita). La única animación es el
+        // llenado de 0 -> valor al refrescar (mantener presionado) o al cambiar el porcentaje.
+        CircularProgressIndicator(
             progress = { anim.value },
             modifier = Modifier.fillMaxSize(),
             color = arc,
             trackColor = track,
-            stroke = stroke,
-            trackStroke = stroke
+            strokeWidth = 8.dp,
+            strokeCap = StrokeCap.Round
         )
         Text(
             "${(anim.value * 100).toInt()}%",
@@ -1104,11 +1109,132 @@ private fun AboutMiniCard(modifier: Modifier, icon: ImageVector, title: String, 
     }
 }
 
+private enum class LogLevel(val letter: String) { ERROR("E"), WARN("W"), SUCCESS("S"), INFO("I"), DEBUG("D") }
+private enum class LogTag { MOUNT, UNMOUNT, WATCH, SYSTEM }
+private data class LogLine(val id: Int, val time: String?, val level: LogLevel, val tag: LogTag, val msg: String)
+
+private val LOG_TS = Regex("^(\\d{4}-\\d{2}-\\d{2}) (\\d{2}:\\d{2}:\\d{2}) (.*)$")
+
+private fun logLevelOf(msg: String): LogLevel {
+    val m = msg.lowercase()
+    return when {
+        listOf("fallo", "error", "no se pudo", "denied", "failed", "bad ").any { it in m } -> LogLevel.ERROR
+        m.startsWith("ok") || "reapareció" in m || "salvó" in m -> LogLevel.SUCCESS
+        listOf("omitido", "ausente", "ram baja", "auto-desmontado", "caído", "recién insertado", "cuenta de gracia").any { it in m } -> LogLevel.WARN
+        listOf("desmontado", "ya montado", "eliminado", "borrado", "montado").any { it in m } -> LogLevel.INFO
+        else -> LogLevel.DEBUG
+    }
+}
+
+private fun logTagOf(msg: String): LogTag {
+    val m = msg.lowercase()
+    return when {
+        "desmont" in m -> LogTag.UNMOUNT
+        m.startsWith("ok") || "ya montado" in m || m.startsWith("fallo") -> LogTag.MOUNT
+        listOf("origen", "bind", "subcarpeta", "volumen", "ram", "oom").any { it in m } -> LogTag.WATCH
+        else -> LogTag.SYSTEM
+    }
+}
+
+private fun parseLog(raw: String): List<LogLine> =
+    raw.lines().filter { it.isNotBlank() }.mapIndexed { i, line ->
+        val m = LOG_TS.matchEntire(line)
+        val msg = m?.groupValues?.get(3) ?: line.trim()
+        LogLine(i, m?.groupValues?.get(2), logLevelOf(msg), logTagOf(msg), msg)
+    }
+
+/** Color semántico de cada nivel. Verde fijo para "éxito" (igual que el semáforo de StatusChip). */
+@Composable
+private fun logColor(level: LogLevel): Color {
+    val cs = MaterialTheme.colorScheme
+    val dark = cs.background.luminance() < 0.5f
+    return when (level) {
+        LogLevel.ERROR -> cs.error
+        LogLevel.WARN -> if (dark) Color(0xFFFFB74D) else Color(0xFFB36B00)
+        LogLevel.SUCCESS -> if (dark) Color(0xFF81C784) else Color(0xFF2E7D32)
+        LogLevel.INFO -> cs.primary
+        LogLevel.DEBUG -> cs.onSurfaceVariant
+    }
+}
+
+@Composable
+private fun LogRow(line: LogLine) {
+    val cs = MaterialTheme.colorScheme
+    val color = logColor(line.level)
+    val mono = FontFamily.Monospace
+    val tagLabel = stringResource(
+        when (line.tag) {
+            LogTag.MOUNT -> R.string.tag_mount
+            LogTag.UNMOUNT -> R.string.tag_unmount
+            LogTag.WATCH -> R.string.tag_watch
+            LogTag.SYSTEM -> R.string.tag_system
+        }
+    )
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        Box(Modifier.width(4.dp).fillMaxHeight().background(color))
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 7.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(20.dp).clip(RoundedCornerShape(7.dp)).background(color.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(line.level.letter, color = color, fontFamily = mono, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                if (line.time != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(line.time, color = cs.onSurfaceVariant, fontFamily = mono, fontSize = 11.sp)
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    tagLabel,
+                    color = color,
+                    fontFamily = mono,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(color.copy(alpha = 0.14f))
+                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                )
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                line.msg,
+                color = if (line.level == LogLevel.DEBUG || line.level == LogLevel.INFO) cs.onSurface else color,
+                fontFamily = mono,
+                fontSize = 12.sp,
+                lineHeight = 17.sp
+            )
+        }
+    }
+}
+
 @Composable
 private fun LogPane(log: String, onClear: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val all = remember(log) { parseLog(log) }
+    var query by remember { mutableStateOf("") }
+    var showFilters by remember { mutableStateOf(false) }
+    var levelFilter by remember { mutableStateOf<LogLevel?>(null) }
+    val visible = remember(all, query, levelFilter) {
+        all.filter { l ->
+            (levelFilter == null || l.level == levelFilter) &&
+                (query.isBlank() || l.msg.contains(query.trim(), ignoreCase = true))
+        }
+    }
+    val listState = rememberLazyListState()
+    var primed by remember { mutableStateOf(false) }
+    LaunchedEffect(visible.size) {
+        if (visible.isNotEmpty() && !primed) {
+            listState.scrollToItem(visible.lastIndex)
+            primed = true
+        }
+    }
+    val firstShown by remember { derivedStateOf { listState.firstVisibleItemIndex } }
+    val lastShown by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 } }
+
     Column(Modifier.fillMaxSize()) {
         UiHeader(stringResource(R.string.log)) {
             IconButton(onClick = {
@@ -1123,33 +1249,110 @@ private fun LogPane(log: String, onClear: () -> Unit) {
                 Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.clear_log))
             }
         }
+        Text(
+            if (visible.isEmpty()) stringResource(R.string.log_lines_fmt, 0, 0, 0)
+            else stringResource(R.string.log_lines_fmt, firstShown + 1, (lastShown + 1).coerceAtMost(visible.size), visible.size),
+            color = cs.onSurfaceVariant,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(start = UiScreenPadding + 4.dp, bottom = 12.dp)
+        )
+        // Buscador en píldora + botón de filtro por nivel
+        Row(
+            Modifier
+                .padding(horizontal = UiScreenPadding)
+                .fillMaxWidth()
+                .clip(CircleShape)
+                .background(cs.surfaceContainerHigh)
+                .padding(start = 16.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Filled.Search, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(12.dp))
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                textStyle = TextStyle(color = cs.onSurface, fontSize = 15.sp),
+                cursorBrush = SolidColor(cs.primary),
+                modifier = Modifier.weight(1f).padding(vertical = 14.dp),
+                decorationBox = { inner ->
+                    Box {
+                        if (query.isEmpty()) {
+                            Text(stringResource(R.string.log_search_hint), color = cs.onSurfaceVariant, fontSize = 15.sp)
+                        }
+                        inner()
+                    }
+                }
+            )
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, null, tint = cs.onSurfaceVariant) }
+            }
+            IconButton(onClick = { showFilters = !showFilters }) {
+                Icon(
+                    Icons.Filled.FilterList,
+                    contentDescription = null,
+                    tint = if (levelFilter != null) cs.primary else cs.onSurfaceVariant
+                )
+            }
+        }
+        AnimatedVisibility(showFilters) {
+            Row(
+                Modifier
+                    .padding(top = 12.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = UiScreenPadding),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val chips = listOf(
+                    null to R.string.log_filter_all,
+                    LogLevel.ERROR to R.string.log_filter_error,
+                    LogLevel.WARN to R.string.log_filter_warn,
+                    LogLevel.SUCCESS to R.string.log_filter_ok,
+                    LogLevel.INFO to R.string.log_filter_info
+                )
+                chips.forEach { (lvl, label) ->
+                    FilterChip(
+                        selected = levelFilter == lvl,
+                        onClick = { levelFilter = lvl },
+                        label = { Text(stringResource(label)) }
+                    )
+                }
+            }
+        }
         Box(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(start = UiScreenPadding, end = UiScreenPadding, bottom = UiNavClearance)
-                .clip(RoundedCornerShape(36.dp))
-                .background(cs.surfaceContainerHigh)
-                .padding(20.dp)
+                .padding(start = UiScreenPadding, end = UiScreenPadding, top = 12.dp, bottom = UiNavClearance)
+                .clip(RoundedCornerShape(28.dp))
+                .background(cs.surfaceContainerLowest)
         ) {
-            // Al vaciar el log, el texto anterior se desvanece deslizándose hacia arriba; el
-            // mensaje de "log vacío" entra con un fundido suave por detrás.
-            AnimatedContent(
-                targetState = log,
-                transitionSpec = {
-                    (fadeIn(tween(220, delayMillis = 120)))
-                        .togetherWith(
-                            fadeOut(tween(220)) + slideOutVertically(tween(220)) { h -> -h / 3 }
-                        )
-                },
-                label = "logContent"
-            ) { text ->
+            if (visible.isEmpty()) {
                 Text(
-                    text.ifBlank { stringResource(R.string.log_empty) },
-                    color = cs.tertiary,
-                    fontSize = 11.sp,
-                    modifier = Modifier.verticalScroll(rememberScrollState())
+                    stringResource(if (all.isEmpty()) R.string.log_empty else R.string.log_no_results),
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.Center)
                 )
+            } else {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    items(visible, key = { it.id }) { LogRow(it) }
+                }
+            }
+            Row(
+                Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SmallFloatingActionButton(
+                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    containerColor = cs.secondaryContainer,
+                    contentColor = cs.onSecondaryContainer
+                ) { Icon(Icons.Filled.VerticalAlignTop, contentDescription = stringResource(R.string.log_scroll_top)) }
+                SmallFloatingActionButton(
+                    onClick = { scope.launch { listState.animateScrollToItem((visible.size - 1).coerceAtLeast(0)) } },
+                    containerColor = cs.secondaryContainer,
+                    contentColor = cs.onSecondaryContainer
+                ) { Icon(Icons.Filled.VerticalAlignBottom, contentDescription = stringResource(R.string.log_scroll_bottom)) }
             }
         }
     }

@@ -99,4 +99,18 @@
     <string name="use_binds">Usar vínculos</string>
     <string name="state_on">Activado</string>
     <string name="state_off">Desactivado</string>
+    <string name="log_lines_fmt">Líneas %1$d–%2$d de %3$d</string>
+    <string name="log_search_hint">Buscar en este registro</string>
+    <string name="log_no_results">Sin resultados</string>
+    <string name="log_filter_all">Todo</string>
+    <string name="log_filter_error">Errores</string>
+    <string name="log_filter_warn">Avisos</string>
+    <string name="log_filter_ok">Éxitos</string>
+    <string name="log_filter_info">Info</string>
+    <string name="log_scroll_top">Ir al inicio</string>
+    <string name="log_scroll_bottom">Ir al final</string>
+    <string name="tag_mount">MONTAJE</string>
+    <string name="tag_unmount">DESMONTAJE</string>
+    <string name="tag_watch">VIGILANCIA</string>
+    <string name="tag_system">SISTEMA</string>
 </resources>

@@ -99,4 +99,18 @@
     <string name="use_binds">Use binds</string>
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
+    <string name="log_lines_fmt">Lines %1$d–%2$d of %3$d</string>
+    <string name="log_search_hint">Search this log</string>
+    <string name="log_no_results">No results</string>
+    <string name="log_filter_all">All</string>
+    <string name="log_filter_error">Errors</string>
+    <string name="log_filter_warn">Warnings</string>
+    <string name="log_filter_ok">Successes</string>
+    <string name="log_filter_info">Info</string>
+    <string name="log_scroll_top">Scroll to top</string>
+    <string name="log_scroll_bottom">Scroll to bottom</string>
+    <string name="tag_mount">MOUNT</string>
+    <string name="tag_unmount">UNMOUNT</string>
+    <string name="tag_watch">WATCH</string>
+    <string name="tag_system">SYSTEM</string>
 </resources>
