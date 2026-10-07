@@ -42,6 +42,7 @@ Referencias: `docs/reference/dolby_inicio.png` (Inicio) y `docs/reference/dolby_
 - Sin cambios: `RootOps`, `Updater`, `Theme`, selector de carpetas y explorador (pantallas completas con `TopAppBar`, fuera del alcance de las capturas).
 
 ## 4. Estado / verificación
+- 🔧 Primer CI en `preview` falló solo por un import faltante (`androidx.compose.runtime.getValue` en `DolbyKit.kt`); ya corregido, pendiente de confirmar el siguiente build.
 - ⚠️ **No se pudo compilar** en el entorno del chat (sin red / sin Gradle). El código se revisó a mano. Primer paso del siguiente chat:
   mirar el resultado del workflow de GitHub Actions en `preview` y corregir errores de compilación si los hay.
   Puntos con más riesgo de API (Compose Material3 `1.5.0-alpha18`): `Switch(thumbContent = …)`, `Button(shapes = …, colors = …)`, `Icons.Filled.Notes` (deprecado pero ya se usaba).
