@@ -38,7 +38,12 @@ private val FONT_NAMES = listOf(
  * Familia con pesos reales (400–800). Antes se envolvía un único Typeface con FontFamily(tf) y
  * Compose ignora el peso en ese caso: todo salía en regular y la negrita no se aplicaba.
  */
-fun loadAppFontFamily(): FontFamily {
+fun loadAppFontFamily(): FontFamily = appFontFamily
+
+/** Se calcula una sola vez (la Application lo pide en segundo plano al arrancar el proceso). */
+private val appFontFamily: FontFamily by lazy { buildAppFontFamily() }
+
+private fun buildAppFontFamily(): FontFamily {
     findFontFile()?.let { file ->
         try {
             if (isVariableFont(file)) {

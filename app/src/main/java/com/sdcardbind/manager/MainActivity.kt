@@ -106,7 +106,9 @@ import com.sdcardbind.manager.ui.UiNavItem
 import com.sdcardbind.manager.ui.UiNavClearance
 import com.sdcardbind.manager.ui.UiScreenPadding
 import com.sdcardbind.manager.ui.uiInnerColor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -288,7 +290,7 @@ fun BindApp() {
             }
             firstStart = false
             while (true) {
-                delay(1500)
+                delay(3000)
                 applyVolumes(RootOps.storageVolumes())
                 // El estado de cada vínculo (presente/ausente) se recalcula en el mismo
                 // ciclo, sin pruneStaleMounts ni tailLog (eso sigue solo en refresh()).
@@ -303,11 +305,23 @@ fun BindApp() {
     // Ajustes de rendimiento (perf.conf del módulo): se leen una vez con root.
     val perf = remember { PerfController() }
     LaunchedEffect(rootOk) {
-        if (rootOk == true) perf.load()
+        if (rootOk != true) return@LaunchedEffect
+        // Trabajo no urgente: se difiere para no competir con los primeros fotogramas.
+        delay(3000)
+        perf.load()
+        // Compilación anticipada de la app (una vez por versión): arranque y scroll fluidos.
+        delay(12000)
+        PerfBoost.ensureCompiled(context)
     }
     LaunchedEffect(rootOk) {
         if (rootOk != true) return@LaunchedEffect
+        var firstForeground = true
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            if (firstForeground) {
+                // La búsqueda de actualizaciones (red + root) espera a que la UI esté asentada.
+                firstForeground = false
+                delay(2500)
+            }
             updates.onForeground()
             // Con la app abierta, vuelve a buscar de vez en cuando (autoCheck limita la frecuencia).
             while (true) {
@@ -899,6 +913,8 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
     }
     val track = if (secondary) cs.secondaryContainer else cs.primaryContainer
     val arc = if (secondary) cs.secondary else cs.primary
+    // Solo cambia (y recompone el texto) cuando varía el entero, no en cada fotograma.
+    val shownPercent by remember { derivedStateOf { (anim.value * 100).toInt() } }
     Box(modifier, contentAlignment = Alignment.Center) {
         // Anillo plano (el ondulado tenía una animación infinita). La única animación es el
         // llenado de 0 -> valor al refrescar (mantener presionado) o al cambiar el porcentaje.
@@ -911,7 +927,7 @@ private fun StorageRing(percent: Int, modifier: Modifier = Modifier, secondary: 
             strokeCap = StrokeCap.Round
         )
         Text(
-            "${(anim.value * 100).toInt()}%",
+            "$shownPercent%",
             color = cs.onSurface,
             style = MaterialTheme.typography.titleMediumEmphasized
         )
@@ -1243,7 +1259,9 @@ private fun LogPane(log: String, landscape: Boolean, onClear: () -> Unit, onRefr
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val all = remember(log) { parseLog(log) }
+    val all by produceState(emptyList<LogLine>(), log) {
+        value = withContext(Dispatchers.Default) { parseLog(log) }
+    }
     var query by remember { mutableStateOf("") }
     var showFilters by remember { mutableStateOf(false) }
     var levelFilter by remember { mutableStateOf<LogLevel?>(null) }

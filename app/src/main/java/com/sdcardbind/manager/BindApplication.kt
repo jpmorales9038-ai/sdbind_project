@@ -1,6 +1,7 @@
 package com.sdcardbind.manager
 
 import android.app.Application
+import com.sdcardbind.manager.ui.loadAppFontFamily
 import com.topjohnwu.superuser.Shell
 
 /**
@@ -30,5 +31,8 @@ class BindApplication : Application() {
         // real (rootOk) lo sigue pidiendo la UI normalmente vía RootOps.isRootAvailable(),
         // que va a encontrar el shell ya listo (o bastante más cerca de estarlo).
         Shell.getShell { }
+        // Detectar la fuente del sistema (E/S de disco) fuera del hilo principal y antes de que
+        // la primera composición la necesite.
+        Thread { loadAppFontFamily() }.apply { priority = Thread.MIN_PRIORITY + 2 }.start()
     }
 }
